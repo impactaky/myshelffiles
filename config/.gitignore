@@ -1,0 +1,6 @@
+zsh/local.zshrc
+zsh/cmdline_comp_gen
+zsh/cmdline_compgen
+zsh/.zcompdump*
+zsh/.chpwd*
+gh

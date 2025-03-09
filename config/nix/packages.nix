@@ -1,2 +1,21 @@
 pkgs: with pkgs; [
-] 
+  atuin
+  deno
+  direnv
+  fzf
+  gh
+  git
+  httpie
+  lazydocker
+  neovim
+  nufmt
+  nushell
+  nixfmt
+  ripgrep
+  starship
+  thefuck
+  tmux
+  uv
+  zoxide
+  zsh
+]
