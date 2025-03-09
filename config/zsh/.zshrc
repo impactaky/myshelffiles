@@ -190,11 +190,11 @@ _tmuxinator() {
   reply=("${(ps:\n:)completions}")
 }
 
-export CMDLINE_COMP_GEN_ZSH_CONFIG_DIR=$DOTFILES/config/zsh/cmdline_comp_gen
+export CMDLINE_COMP_GEN_ZSH_CONFIG_DIR=$XDG_CONFIG_HOME/zsh/cmdline_comp_gen
 
 # zinit
 export DURUN_HOME=/mnt/ext1/rootfs
-source $DOTFILES/config/zsh/zinit_conf.zsh
+source $XDG_CONFIG_HOME/zsh/zinit_conf.zsh
 
 export MANPAGER="/bin/sh -c \"col -b -x| nvim -R -c 'set ft=man nolist nonu noma' -\""
 
@@ -261,8 +261,8 @@ function vp () {
 }
 
 eval "$(direnv hook zsh)"
-if [ -e $DOTFILES/config/zsh/local.zshrc ]; then
-	source $DOTFILES/config/zsh/local.zshrc
+if [ -e $XDG_CONFIG_HOME/zsh/local.zshrc ]; then
+	source $XDG_CONFIG_HOME/zsh/local.zshrc
 fi
 
 zmodload zsh/zpty

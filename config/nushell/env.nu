@@ -36,7 +36,7 @@ $env.ENV_CONVERSIONS = {
     }
 }
 
-$env.NUPM_HOME = $env.DOTFILES | path join "config" "nupm"
+$env.NUPM_HOME = $env.XDG_CONFIG_HOME | path join "nupm"
 
 # Directories to search for scripts when calling source or use
 # The default for this is $nu.default-config-dir/scripts
