@@ -1,0 +1,27 @@
+[diff]
+tool = nvimdiff
+[difftool "nvimdiff"]
+cmd = "nvim -R -d -c \"wincmd l\" -d \"$LOCAL\" \"$REMOTE\""
+[mergetool "nvimdiff"]
+cmd = "nvim -d -c \"4wincmd w | wincmd J\" \"$LOCAL\" \"$BASE\" \"$REMOTE\"  \"$MERGED\""
+[merge]
+tool = nvimdiff
+conflictstyle = diff3
+
+[user]
+email = impactaky@users.noreply.github.com
+name = impactaly
+
+[filter "lfs"]
+clean = git-lfs clean -- %f
+smudge = git-lfs smudge -- %f
+process = git-lfs filter-process
+required = true
+
+[submodule]
+recurse = true
+
+[filter "devcontainer"]
+smudge = cat
+clean = sed "/shelffiles/d"
+
