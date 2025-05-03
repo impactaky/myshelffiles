@@ -123,8 +123,6 @@ alias df="df -h"
 
 alias su="su -l"
 
-alias rm="trash"
-
 ## terminal configuration
 #
 case "${TERM}" in
