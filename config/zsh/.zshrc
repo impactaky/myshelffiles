@@ -208,7 +208,7 @@ else
 fi
 alias dhcrun='docker run --rm -it --net=host --group-add=sudo --user=$(id -u):$(id -g) --volume=/etc/group:/etc/group:ro --volume=/etc/passwd:/etc/passwd:ro --volume=/etc/shadow:/etc/shadow:ro -v=$HOME/aarch64_home:$HOME -v=$HOME/Documents:$HOME/Documents -v=$HOME/office:$HOME/office -v=/mnt:/mnt --workdir=$(pwd)'
 alias dhrun_armhf='docker run --rm -it --net=host --group-add=sudo --user=$(id -u):$(id -g) --volume=/etc/group:/etc/group:ro --volume=/etc/passwd:/etc/passwd:ro --volume=/etc/shadow:/etc/shadow:ro -v=$HOME/armhf:$HOME -v=$HOME/Documents:$HOME/Documents -v=$HOME/office:$HOME/office -v=/mnt:/mnt --workdir=$(pwd)'
-dob () { docker build --target $1 -t localhost:5000/$1 ${@:2} }
+dob() { docker build --target "$1" -t "localhost:5000/$1" "${@:2}"; }
 
 # echo_previous_outpt
 PromptCmdLinePattern="${HOST%%.*}"
@@ -234,7 +234,7 @@ alias scp='check_ssh-agent_and_execute && scp'
 alias rsync='check_ssh-agent_and_execute && rsync'
 alias sshfs='check_ssh-agent_and_execute && sshfs'
 
-fuction notify_to_tmux_window_name () {
+function notify_to_tmux_window_name() {
     tmux list-windows -a -F "#{pane_pid} #{window_id}" \
         | grep $$ \
         | cut -d ' ' -f 2 \
