@@ -45,7 +45,7 @@ setopt noautoremoveslash
 
 ## Keybind configuration
 #
-# vim like keybind 
+# vim like keybind
 #    and something additions
 #
 bindkey -v

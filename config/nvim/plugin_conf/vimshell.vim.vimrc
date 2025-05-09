@@ -1,6 +1,6 @@
 let g:vimshell_user_prompt = 'fnamemodify(getcwd(), ":~")'
 "let g:vimshell_right_prompt = 'vcs#info("(%s)-[%b]", "(%s)-[%b|%a]")'
-	
+
 let g:vimshell_split_command = "vsplit"
 
 if has('win32') || has('win64')
@@ -29,4 +29,3 @@ endfunction
 
 " let g:vimshell_no_default_keymappings = 1
 let g:vimshell_external_history_path = expand('~/.zsh-history')
-

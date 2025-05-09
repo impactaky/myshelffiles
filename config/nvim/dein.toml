@@ -331,7 +331,7 @@ hook_add = '''
 repo = 'vim-jp/cpp-vim'
 lazy = 1
 on_ft = 'cpp'
- 
+
 [[plugins]]
 repo = 'vim-jp/vimdoc-ja'
 

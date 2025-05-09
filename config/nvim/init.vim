@@ -89,7 +89,7 @@ endfunction
 vmap <Leader>y :call OscYank()<CR>
 
 if exists('g:vscode')
-    map <Leader>c <C-/> 
+    map <Leader>c <C-/>
     nmap <Leader>f <Cmd>call VSCodeCall("editor.action.formatDocument")<CR><Esc>
     nmap g[ <Cmd>call VSCodeCall("editor.action.goToReferences")<CR><Esc>
     nmap g] gd

@@ -15,9 +15,9 @@ finish
   " let g:tcommentMapLeader1 =
   " let g:tcommentMapLeader2 =
   " let g:tcommentMapLeaderOp1 =
-  " let g:tcommentMapLeaderUncommentAnyway = 
-  " let g:tcommentMapLeaderCommentAnyway   = 
-  " let g:tcommentTextObjectInlineComment  = 
+  " let g:tcommentMapLeaderUncommentAnyway =
+  " let g:tcommentMapLeaderCommentAnyway   =
+  " let g:tcommentTextObjectInlineComment  =
 
 " 挙動設定
   " 空行もコメントアウトするか
@@ -29,7 +29,7 @@ finish
   " let g:tcommentModeExtra = ''
   " オペレータの挙動設定
   " let g:tcommentOpModeExtra = ''
-  " 
+  "
   " let g:tcommentOptions = {'col': 1}
 
 " その他，

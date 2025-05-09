@@ -1,7 +1,7 @@
 scan_timeout = 10
 
 format = '''$status[\[$hostname\] - \[$directory\]$git_branch$fill\[$time\]](bold blue)
-[\$](bold purple) 
+[\$](bold purple)
 '''
 add_newline = false
 
@@ -34,4 +34,3 @@ disabled = true
 
 [git_commit]
 disabled = true
-
