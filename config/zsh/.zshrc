@@ -1,3 +1,4 @@
+#!/bin/zsh
 # Users generic .zshrc file for zsh(1)
 
 ## Environment variable configuration
@@ -78,7 +79,7 @@ bindkey "\\en" history-beginning-search-forward-end
 bindkey "\e[Z" reverse-menu-complete
 ## Completion configuration
 #
-fpath=(${HOME}/.zsh/functions/Completion ${fpath})
+fpath=("${HOME}/.zsh/functions/Completion" "${fpath[@]}")
 autoload -U compinit
 compinit
 
@@ -98,7 +99,7 @@ alias where="command -v"
 alias j="jobs -l"
 alias grep="grep --color=auto"
 
-if [ $(where nvim) ]; then
+if [ "$(where nvim)" ]; then
     alias vim="nvim"
     export EDITOR='nvim'
     export MANPAGER="/bin/sh -c \"col -b -x| nvim -R -c 'set ft=man nolist nonu noma' -\""
@@ -177,14 +178,16 @@ compctl -K _tmuxinator tmuxinator mux
 
 _tmuxinator() {
   local words completions
-  read -cA words
+  read -cr words
 
   if [ "${#words}" -eq 2 ]; then
     completions="$(tmuxinator commands)"
   else
-    completions="$(tmuxinator completions ${words[2,-2]})"
+    completions="$(tmuxinator completions "${words[2,-2]}")"
   fi
 
+  # zsh-specific syntax, shellcheck doesn't understand it
+  # shellcheck disable=SC2296
   reply=("${(ps:\n:)completions}")
 }
 
@@ -192,7 +195,7 @@ export CMDLINE_COMP_GEN_ZSH_CONFIG_DIR=$XDG_CONFIG_HOME/zsh/cmdline_comp_gen
 
 # zinit
 export DURUN_HOME=/mnt/ext1/rootfs
-source $XDG_CONFIG_HOME/zsh/zinit_conf.zsh
+source "$XDG_CONFIG_HOME/zsh/zinit_conf.zsh"
 
 export MANPAGER="/bin/sh -c \"col -b -x| nvim -R -c 'set ft=man nolist nonu noma' -\""
 
@@ -247,11 +250,11 @@ alias N="notify_to_tmux_window_name"
 alias cmake="cmake -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_EXPORT_COMPILE_COMMANDS=1"
 
 function latest () {
-    ls -t $@ | head -n 1
+    ls -t "$@" | head -n 1
 }
 
 function seps () {
-    sed 's/[\t ]\+/\t/g' | cut $@
+    sed 's/[\t ]\+/\t/g' | cut "$@"
 }
 
 function vp () {
@@ -259,8 +262,8 @@ function vp () {
 }
 
 eval "$(direnv hook zsh)"
-if [ -e $XDG_CONFIG_HOME/zsh/local.zshrc ]; then
-	source $XDG_CONFIG_HOME/zsh/local.zshrc
+if [ -e "$XDG_CONFIG_HOME/zsh/local.zshrc" ]; then
+	source "$XDG_CONFIG_HOME/zsh/local.zshrc"
 fi
 
 zmodload zsh/zpty
@@ -274,7 +277,7 @@ zoxide_fzf() {
   dir=$(zoxide query -l | fzf --reverse --height 80% --border rounded)
   if [ -n "$dir" ]; then
     zoxide add "$dir"
-    cd "$dir"
+    cd "$dir" || return
   fi
   zle reset-prompt
 }
