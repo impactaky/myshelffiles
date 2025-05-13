@@ -5,6 +5,7 @@ pkgs: with pkgs; [
   fzf
   gh
   git
+  git-lfs
   httpie
   lazydocker
   neovim
