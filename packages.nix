@@ -9,9 +9,10 @@ pkgs: with pkgs; [
   httpie
   lazydocker
   neovim
+  nodePackages.npm
+  nodejs
   nufmt
   nushell
-  nixfmt
   ripgrep
   starship
   thefuck
