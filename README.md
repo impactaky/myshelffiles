@@ -7,6 +7,8 @@ Shelffiles is a portable environment configuration system that uses Nix to manag
 ### Prerequisites
 
 - [Nix package manager](https://nixos.org/download.html) with flakes enabled
+- For rootless environments: [Bubblewrap](https://github.com/containers/bubblewrap)
+- For environments with root but immutable /nix: sudo access
 
 ### Installation
 
@@ -28,6 +30,27 @@ Shelffiles is a portable environment configuration system that uses Nix to manag
    ./entrypoint/fish   # For fish
    ./entrypoint/bash   # For bash
    ```
+
+### Environment Types
+
+Shelffiles supports three types of environments:
+
+1. **Root access with editable /nix** (Default):
+   - Direct Nix build with system-wide Nix installation
+   - No additional setup required
+
+2. **Root access with immutable /nix**:
+   - Uses Linux namespaces to mount a local ./nix directory at /nix
+   - Requires one-time setup with sudo:
+     ```bash
+     sudo ./entrypoint/setup_namespace.sh
+     ```
+   - After setup, use the regular entrypoint scripts
+
+3. **No root access**:
+   - Uses Bubblewrap to create an isolated environment
+   - Automatically used when root access is not available
+   - Requires Bubblewrap to be installed
 
 ## Customization
 

@@ -8,6 +8,28 @@ SCRIPT_DIR="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)"
 
 # Execute fish
 if [ ! -e "$SHELFFILES/result" ]; then
-    exec "$SCRIPT_DIR/launch_in_bwrap.sh" fish "$@"
+    # Check if we have root access but can't modify /nix
+    if [ "$(id -u)" -eq 0 ] || [ -w / ]; then
+        # Check if /nix exists and is not writable
+        if [ -e /nix ] && [ ! -w /nix ]; then
+            # Check if namespace is set up
+            NAMESPACE_DIR="/run/shelffiles-ns"
+            NAMESPACE_NAME="shelffiles_$(echo "$SHELFFILES" | tr '/:' '_')"
+            NAMESPACE_PATH="$NAMESPACE_DIR/$NAMESPACE_NAME"
+            
+            if [ -e "$NAMESPACE_PATH" ]; then
+                exec "$SCRIPT_DIR/launch_in_namespace.sh" fish "$@"
+            else
+                echo "Namespace not set up. Please run 'sudo $SCRIPT_DIR/setup_namespace.sh' first."
+                exit 1
+            fi
+        else
+            # Use bubblewrap for rootless environment
+            exec "$SCRIPT_DIR/launch_in_bwrap.sh" fish "$@"
+        fi
+    else
+        # Use bubblewrap for rootless environment
+        exec "$SCRIPT_DIR/launch_in_bwrap.sh" fish "$@"
+    fi
 fi
 exec fish "$@"
