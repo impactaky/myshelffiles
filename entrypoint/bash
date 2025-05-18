@@ -19,7 +19,7 @@ if [ ! -e "$SHELFFILES/result" ]; then
             NAMESPACE_DIR="/run/shelffiles-ns"
             NAMESPACE_NAME="shelffiles_$(echo "$SHELFFILES" | tr '/:' '_')"
             NAMESPACE_PATH="$NAMESPACE_DIR/$NAMESPACE_NAME"
-            
+
             if [ -e "$NAMESPACE_PATH" ]; then
                 exec "$SCRIPT_DIR/launch_in_namespace.sh" bash --init-file "$XDG_CONFIG_HOME"/bash/.bashrc "$@"
             else

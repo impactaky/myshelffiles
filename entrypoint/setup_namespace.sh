@@ -31,9 +31,9 @@ mkdir -p "$NIX_HOST_PATH"
 
 unshare --mount --pid --fork --mount-proc bash -c "
   mount --bind \"$NIX_HOST_PATH\" /nix
-  
+
   echo \$\$ > \"$NAMESPACE_PATH\"
-  
+
   exec tail -f /dev/null
 " &
 
