@@ -11,8 +11,6 @@ pkgs: with pkgs; [
   neovim
   nodePackages.npm
   nodejs
-  nufmt
-  nushell
   ripgrep
   starship
   thefuck
