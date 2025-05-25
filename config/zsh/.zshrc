@@ -258,6 +258,8 @@ function vp () {
     ex -s "$@" +%p +q! /dev/stdin
 }
 
+PATH="$XDG_DATA_HOME/npm/bin:$PATH"
+
 eval "$(direnv hook zsh)"
 if [ -e $XDG_CONFIG_HOME/zsh/local.zshrc ]; then
 	source $XDG_CONFIG_HOME/zsh/local.zshrc

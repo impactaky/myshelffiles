@@ -1,4 +1,5 @@
 pkgs: with pkgs; [
+  argc
   atuin
   deno
   direnv
