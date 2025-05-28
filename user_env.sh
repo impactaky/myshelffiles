@@ -6,4 +6,4 @@ export STARSHIP_CACHE="$XDG_CACHE_HOME"/starship
 
 ## npm
 export NPM_CONFIG_USERCONFIG=$XDG_CONFIG_HOME/npm/npmrc
-export PATH="$XDG_CONFIG_DATA_HOME/npm/bin:$PATH"
+export PATH="$XDG_DATA_HOME/npm/bin:$PATH"
