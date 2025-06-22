@@ -14,7 +14,6 @@ pkgs: with pkgs; [
   nodejs
   ripgrep
   starship
-  thefuck
   tmux
   uv
   zoxide
