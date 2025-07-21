@@ -1,4 +1,5 @@
 pkgs: with pkgs; [
+  _1password-cli
   argc
   atuin
   deno
@@ -11,7 +12,6 @@ pkgs: with pkgs; [
   lazydocker
   neovim
   nodePackages.npm
-  nodejs
   ripgrep
   starship
   tmux
