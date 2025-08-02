@@ -2,6 +2,7 @@ pkgs: with pkgs; [
   _1password-cli
   argc
   atuin
+  claude-code
   deno
   direnv
   fzf
