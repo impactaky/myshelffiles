@@ -12,7 +12,7 @@ pkgs: _: with pkgs; [
   httpie
   lazydocker
   neovim
-  nodePackages.npm
+  nodejs_24
   ripgrep
   starship
   tmux
