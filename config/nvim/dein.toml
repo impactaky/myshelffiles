@@ -364,3 +364,15 @@ hook_source = 'runtime plugin_conf/deoplete-zsh.vimrc'
 
 [[plugins]]
 repo = 'ziglang/zig.vim'
+
+[[plugins]]
+repo = 'folke/snacks.nvim'
+
+[[plugins]]
+repo = 'coder/claudecode.nvim'
+depends = ['snacks.nvim']
+hook_add = '''
+lua << EOF
+  vim.g.claudecode_auto_setup = { auto_start = true }
+EOF
+'''
