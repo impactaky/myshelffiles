@@ -5,6 +5,7 @@ pkgs: _: with pkgs; [
   claude-code
   deno
   direnv
+  findutils
   fzf
   gh
   git
