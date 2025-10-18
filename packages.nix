@@ -11,6 +11,7 @@ pkgs: _: with pkgs; [
   git-lfs
   httpie
   lazydocker
+  mise
   neovim
   nodejs_24
   ripgrep

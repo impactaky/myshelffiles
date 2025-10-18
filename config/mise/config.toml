@@ -1,0 +1,3 @@
+[tools]
+"npm:@openai/codex" = "latest"
+

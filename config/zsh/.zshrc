@@ -271,6 +271,7 @@ eval "$(fzf --zsh)"
 eval "$(starship init zsh)"
 eval "$(atuin init zsh --disable-up-arrow)"
 eval "$(zoxide init zsh)"
+eval "$(mise activate zsh)"
 zoxide_fzf() {
   local dir
   dir=$(zoxide query -l | fzf --reverse --height 80% --border rounded)
