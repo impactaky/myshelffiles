@@ -12,7 +12,6 @@ zinit light impactaky/useful_ssh-agent.zsh
 zinit light impactaky/durun.zsh
 zinit light woefe/git-prompt.zsh
 zinit ice as"program"
-zinit light "impactaky/code_for_another_session"
 
 # These package install homebrew in macOS
 if [[ "$(uname -s)" != "Darwin" ]]; then
