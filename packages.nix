@@ -2,7 +2,6 @@ pkgs: _: with pkgs; [
   _1password-cli
   argc
   atuin
-  claude-code
   deno
   direnv
   findutils
@@ -16,6 +15,7 @@ pkgs: _: with pkgs; [
   neovim
   nodejs_24
   ripgrep
+  rsync
   starship
   tmux
   uv
