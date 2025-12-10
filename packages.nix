@@ -1,4 +1,4 @@
-pkgs: nix-ai-tools: with pkgs; [
+pkgs: with pkgs; [
   _1password-cli
   argc
   atuin
