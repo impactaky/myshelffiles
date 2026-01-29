@@ -9,6 +9,7 @@ pkgs: with pkgs; [
   gh
   git
   git-lfs
+  git-subrepo
   httpie
   lazydocker
   mise

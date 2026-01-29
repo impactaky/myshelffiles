@@ -21,4 +21,3 @@ required = true
 [filter "devcontainer"]
 smudge = cat
 clean = sed "/shelffiles/d"
-
