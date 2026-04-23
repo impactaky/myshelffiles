@@ -1,5 +1,11 @@
 [tools]
 "npm:@anthropic-ai/claude-code" = "latest"
+"npm:@anthropic-ai/sandbox-runtime" = "latest"
 "npm:@fission-ai/openspec" = "latest"
 "npm:@google/gemini-cli" = "latest"
 "npm:@openai/codex" = "latest"
+"opencode" = "latest"
+"npm:agent-browser" = "latest"
+"npm:@just-every/code" = "latest"
+"pnpm" = "latest"
+"rust" = "stable"
