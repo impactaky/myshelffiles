@@ -1,0 +1,40 @@
+#!/bin/sh
+set -eu
+
+old_head="$1"
+new_head="$2"
+is_branch_checkout="$3"
+
+# Runs for git worktree add / clone initial checkout.
+# Avoid running on normal branch switches.
+null_ref="0000000000000000000000000000000000000000"
+if [ "$old_head" != "$null_ref" ]; then
+  exit 0
+fi
+
+agentfiles="/mnt/ext1/vibe-kanban/agentfiles/"
+git_root="$(git rev-parse --show-toplevel)"
+git_common_dir="$(git rev-parse --path-format=absolute --git-common-dir)"
+worktree_source_dir="${git_common_dir%/.git}"
+worktree_source_dir_real="$(cd "$worktree_source_dir" && pwd -P)"
+
+setup_vibe_kanban_worktree() {
+  cp "$agentfiles/AGENTS.override.md" "$git_root/AGENTS.override.md"
+  cp -r "$agentfiles/.myagents" "$git_root/.myagents"
+  # Use the source repo's name so vibe-kanban worktrees (<repo>-worktree-<slug>)
+  # resolve to the same rules as the repo itself.
+  ln -sf "/mnt/ext1/vibe-kanban/impactaky-knowledge/projects/$(basename "$worktree_source_dir_real")/rules.md" ./project-rules.md
+}
+
+if ! git symbolic-ref HEAD &>/dev/null; then
+  setup_vibe_kanban_worktree
+fi
+
+case "$worktree_source_dir_real" in
+  /mnt/ext1/vibe-kanban|/mnt/ext1/vibe-kanban/*)
+    setup_vibe_kanban_worktree
+    ;;
+  *)
+    # Add path-specific setup here as needed.
+    ;;
+esac
