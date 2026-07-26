@@ -1,11 +1,19 @@
+[settings]
+install_before = "1d"
+
 [tools]
+"aqua:gastownhall/beads" = "latest"
 "npm:@anthropic-ai/claude-code" = "latest"
 "npm:@anthropic-ai/sandbox-runtime" = "latest"
-"npm:@fission-ai/openspec" = "latest"
-"npm:@google/gemini-cli" = "latest"
-"npm:@openai/codex" = "latest"
-"opencode" = "latest"
-"npm:agent-browser" = "latest"
 "npm:@just-every/code" = "latest"
-"pnpm" = "latest"
+"npm:@openai/codex" = "latest"
+"npm:agent-browser" = "latest"
+"npm:agmsg" = "latest"
+"npm:beads-ui" = "latest"
+"npm:yarn" = "latest"
+"opencode" = "latest"
 "rust" = "stable"
+
+# [tools."npm:@openai/codex"]
+# version = "latest"
+# install_before = "0d"
