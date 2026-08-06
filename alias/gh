@@ -1,4 +1,0 @@
-#!/usr/bin/env zsh
-
-op run --no-masking -- $SHELFFILES/result/bin/gh $@
-
