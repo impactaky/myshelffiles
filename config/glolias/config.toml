@@ -1,0 +1,4 @@
+version = 1
+
+[aliases]
+gh = ["op", "run", "--no-masking", "--", "gh"]
