@@ -5,6 +5,7 @@ state/
 result
 flake.lock
 config/claude
+config/op
 
 # Editor files
 .vscode/
