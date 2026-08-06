@@ -5,6 +5,7 @@ pkgs: with pkgs; [
   deno
   direnv
   findutils
+  firecracker
   fzf
   gh
   git
@@ -13,12 +14,14 @@ pkgs: with pkgs; [
   httpie
   lazydocker
   mise
+  nix
   neovim
   nodejs_24
   ripgrep
   rsync
   starship
   tmux
+  util-linux
   uv
   zoxide
   zsh

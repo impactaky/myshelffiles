@@ -1,3 +1,5 @@
 .myagents
 AGENTS.override.md
 project-rules.md
+
+**/.claude/settings.local.json

@@ -21,3 +21,12 @@ required = true
 [filter "devcontainer"]
 smudge = cat
 clean = sed "/shelffiles/d"
+
+[core]
+hooksPath = /home/impactaky/shelffiles/config/git/.githooks
+[credential "https://github.com"]
+	helper = 
+	helper = !/home/impactaky/shelffiles/result/bin/gh auth git-credential
+[credential "https://gist.github.com"]
+	helper = 
+	helper = !/home/impactaky/shelffiles/result/bin/gh auth git-credential

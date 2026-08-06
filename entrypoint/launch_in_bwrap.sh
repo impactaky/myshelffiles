@@ -51,8 +51,8 @@ while IFS= read -r entry_path; do
 done < <(find / -maxdepth 1 -mindepth 1)
 
 # Handle /nix
-BWRAP_ARGS+=(--dir /nix)
-BWRAP_ARGS+=(--bind "$NIX_HOST_PATH" /nix)
+# BWRAP_ARGS+=(--dir /nix)
+# BWRAP_ARGS+=(--bind "$NIX_HOST_PATH" /nix)
 
 # Use sudo mount launcher if enabled, otherwise use bwrap
 if [ "${SUDO_MOUNT_ENABLED:-0}" -eq 1 ] && [ -x "$SCRIPT_DIR/launch_with_nsenter.sh" ]; then

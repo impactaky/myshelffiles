@@ -52,13 +52,19 @@ if dein#load_state("$XDG_CACHE_HOME/dein")
     if !exists('g:vscode')
         call dein#load_toml("$XDG_CONFIG_HOME/nvim/dein.toml")
     endif
-	if filereadable(expand("$XDG_CONFIG_HOME/nvim/local.toml"))
-		call dein#load_toml("$XDG_CONFIG_HOME/nvim/local.toml")
-	endif
-	call dein#end()
+    if filereadable(expand("$XDG_CONFIG_HOME/nvim/local.toml"))
+        call dein#load_toml("$XDG_CONFIG_HOME/nvim/local.toml")
+    endif
+    call dein#end()
 endif
 if dein#check_install()
   call dein#install()
+endif
+if empty(globpath(&runtimepath, 'lua/vscode/internal.lua'))
+  let s:vscode_runtime = '/Users/impactaky/.windsurf/extensions/asvetliakov.vscode-neovim-1.18.24-universal/runtime'
+  if isdirectory(s:vscode_runtime)
+    execute 'set runtimepath^=' . fnameescape(s:vscode_runtime)
+  endif
 endif
 
 " 256色表示設定

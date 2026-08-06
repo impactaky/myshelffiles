@@ -1,4 +1,5 @@
 export GH_TOKEN="${GH_TOKEN:-op://shelffiles/GH_TOKEN/credential}"
+export XAI_API_KEY="${XAI_API_KEY:-op://shelffiles/XAI_API_KEY/credential}"
 
 function atuin_login() {
   ATUIN_USER="op://shelffiles/atuin/username" \

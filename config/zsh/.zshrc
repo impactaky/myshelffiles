@@ -265,6 +265,7 @@ if [ -e $XDG_CONFIG_HOME/zsh/local.zshrc ]; then
 	source $XDG_CONFIG_HOME/zsh/local.zshrc
 fi
 
+
 zmodload zsh/zpty
 
 eval "$(fzf --zsh)"
@@ -283,3 +284,6 @@ zoxide_fzf() {
 }
 zle -N zoxide_fzf
 bindkey '^f' zoxide_fzf
+
+# bun completions
+[ -s "/home/impactaky/.bun/_bun" ] && source "/home/impactaky/.bun/_bun"
