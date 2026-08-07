@@ -1,0 +1,4 @@
+[tools]
+"npm:@anthropic-ai/claude-code" = "latest"
+"npm:@anthropic-ai/sandbox-runtime" = "latest"
+"npm:@openai/codex" = "latest"
