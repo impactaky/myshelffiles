@@ -3,5 +3,6 @@ install_before = "1d"
 
 [tools]
 "npm:agent-browser" = "latest"
-"npm:agmsg" = "latest"
 "rust" = "stable"
+"github:impactaky/glolias" = "latest"
+"github:herdrdev/herdr" = "latest"

@@ -1,4 +1,4 @@
 version = 1
 
 [aliases]
-gh = ["op", "run", "--no-masking", "--", "gh"]
+gh = ["op", "run", "--no-masking", "--", "/home/impactaky/shelffiles/result/bin/gh"]

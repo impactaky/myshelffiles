@@ -3,3 +3,5 @@ AGENTS.override.md
 project-rules.md
 
 **/.claude/settings.local.json
+
+**/.claude/.cc-writes/
