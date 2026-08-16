@@ -69,9 +69,22 @@ PORTABLE_STORE="$(CDPATH='' cd -- "$PORTABLE_ROOT/portable/nix/store" 2>/dev/nul
   printf 'Portable store is missing. Run utils/create_portable.sh first.\n' >&2
   return 1
 }
+PORTABLE_RESULT="$PORTABLE_ROOT/portable/result"
+PORTABLE_RESULT_RESOLVED="$(CDPATH='' cd -- "$PORTABLE_RESULT" 2>/dev/null && pwd -P)" || {
+  printf 'Portable result is missing or broken. Run utils/create_portable.sh first.\n' >&2
+  return 1
+}
+case "$PORTABLE_RESULT_RESOLVED" in
+  "$PORTABLE_STORE"/*) ;;
+  *)
+    printf 'Portable result resolves outside the portable store: %s\n' \
+      "$PORTABLE_RESULT_RESOLVED" >&2
+    return 1
+    ;;
+esac
 
 activate_portable_environment \
-  /tmp/impac "$PORTABLE_STORE" "$PORTABLE_ROOT/portable/result" || {
+  /tmp/impac "$PORTABLE_STORE" "$PORTABLE_RESULT" || {
   portable_status=$?
   return "$portable_status"
 }

@@ -53,7 +53,7 @@ create_export_fixture() {
   mkdir -p "$result_path/bin" "$dependency_path/lib"
   printf 'binary-prefix\0/nix/store\0binary-suffix\n' >"$dependency_path/lib/value"
   # shellcheck disable=SC2016
-  printf '#!/bin/sh\nprintf "SHELL=%%s\\nPATH=%%s\\nSHELFFILES=%%s\\n" "$(basename "$0")" "$PATH" "$SHELFFILES"\n' \
+  printf '#!/bin/sh\nprintf "SHELL=%%s\\nPATH=%%s\\nSHELFFILES=%%s\\nSHELFFILES_ENV_FILE=%%s\\n" "$(basename "$0")" "$PATH" "$SHELFFILES" "${SHELFFILES_ENV_FILE-unset}"\n' \
     >"$result_path/bin/shell-template"
   chmod 0755 "$result_path/bin/shell-template"
   for shell_name in bash fish zsh; do
@@ -161,6 +161,7 @@ EOF
     [ "$(readlink /tmp/impac)" = "$expected_store" ]
     [[ "$output" == *"PATH=$checkout/portable/result/bin:"* ]]
     [[ "$output" == *":$checkout/result/bin:"* ]]
+    [[ "$output" == *"SHELFFILES_ENV_FILE=unset"* ]]
   done
 
   rm -- /tmp/impac
@@ -182,4 +183,56 @@ EOF
   run env PATH="$fake_bin:$PATH" "$checkout/portable/entrypoint/bash"
   [ "$status" -eq 73 ]
   [ -f "/tmp/impac/$fixed_alias_token" ]
+}
+
+@test "ordinary entrypoints continue when ordinary user environment returns nonzero" {
+  require_writable_nix_store
+  create_export_fixture
+  printf 'return 42\n' >"$checkout/user_env.sh"
+
+  for shell_name in bash fish zsh; do
+    run env PATH="$fake_bin:$PATH" "$checkout/entrypoint/$shell_name"
+    echo "$output"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"SHELL=$shell_name"* ]]
+    [[ "$output" == *"SHELFFILES_ENV_FILE=unset"* ]]
+  done
+}
+
+@test "portable wrappers reject a missing broken or misplaced result before launch" {
+  require_writable_nix_store
+  create_export_fixture
+  run env PATH="$fake_bin:$PATH" "$checkout/utils/create_portable.sh"
+  [ "$status" -eq 0 ]
+
+  if [ -e /tmp/impac ] || [ -L /tmp/impac ]; then
+    skip 'pre-existing /tmp/impac is left untouched'
+  fi
+
+  rm -- "$checkout/portable/result"
+  run env PATH="$fake_bin:$PATH" "$checkout/portable/entrypoint/bash"
+  echo "$output"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"Portable result is missing or broken"* ]]
+  [[ "$output" != *"SHELL=bash"* ]]
+  [ ! -e /tmp/impac ]
+  [ ! -L /tmp/impac ]
+
+  ln -s nix/store/missing-result "$checkout/portable/result"
+  run env PATH="$fake_bin:$PATH" "$checkout/portable/entrypoint/bash"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"Portable result is missing or broken"* ]]
+  [[ "$output" != *"SHELL=bash"* ]]
+  [ ! -e /tmp/impac ]
+  [ ! -L /tmp/impac ]
+
+  rm -- "$checkout/portable/result"
+  ln -s ../result "$checkout/portable/result"
+  run env PATH="$fake_bin:$PATH" "$checkout/portable/entrypoint/bash"
+  echo "$output"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"Portable result resolves outside the portable store"* ]]
+  [[ "$output" != *"SHELL=bash"* ]]
+  [ ! -e /tmp/impac ]
+  [ ! -L /tmp/impac ]
 }
