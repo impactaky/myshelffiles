@@ -4,7 +4,8 @@
 SCRIPT_DIR="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)"
 
 # Source the environment setup
-. "$SCRIPT_DIR/env.sh"
+# shellcheck disable=SC1090
+. "${SHELFFILES_ENV_FILE:-$SCRIPT_DIR/env.sh}" || exit $?
 
 mkdir -p "$XDG_STATE_HOME"/bash
 export HISTFILE="$XDG_STATE_HOME"/bash/history

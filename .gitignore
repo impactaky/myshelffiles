@@ -17,3 +17,5 @@ config/op
 user_env.sh
 
 /nix
+/portable/nix
+/portable/result

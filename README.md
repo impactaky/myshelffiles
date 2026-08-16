@@ -29,6 +29,68 @@ Shelffiles is a portable environment configuration system that uses Nix to manag
    ./entrypoint/bash   # For bash
    ```
 
+## Portable runtime export (Linux)
+
+After the ordinary `nix build` succeeds, you can export that existing `result`
+closure into this checkout:
+
+```bash
+./utils/create_portable.sh
+```
+
+The exporter requires Linux, an existing `result` that resolves to a
+`/nix/store/<hash>-...` directory, and `nix-store --query --requisites`
+(available either on `PATH` or in `result/bin`). It does not run another build,
+download packages, write to `/nix/store`, or change the ordinary `result`.
+Instead, it copies the complete runtime closure into `portable/nix/store` and
+creates a relative `portable/result` symlink.
+
+Enter the exported environment with the portable wrappers:
+
+```bash
+./portable/entrypoint/bash
+./portable/entrypoint/fish
+./portable/entrypoint/zsh
+```
+
+The ordinary `entrypoint/*` commands remain unchanged by default and continue
+to use the ordinary `result`. Both modes share this checkout's `config`,
+`cache`, `share`, and `state` directories. The portable wrappers source the
+ordinary environment setup first, then place `portable/result/bin` before the
+ordinary result in `PATH`.
+
+### Relocation behavior and regeneration
+
+The exported closure replaces every literal `/nix/store` byte sequence in
+regular files and symlink targets with `/tmp/impac`. These prefixes are both
+exactly 10 bytes; the exporter verifies that precondition and rejects an export
+if any `/nix/store` literal remains.
+
+At portable startup, `/tmp/impac` must be a symlink to this checkout's absolute
+`portable/nix/store` path. The entrypoint creates it when absent and reuses it
+when already correct. If the path is a different symlink, a regular file, or a
+directory, the entrypoint prints a conflict and exits with status 73 without
+removing or replacing that object. Resolve the conflict yourself before retrying.
+
+Running the exporter again deliberately removes and recreates only these
+generated paths:
+
+```text
+portable/nix
+portable/result
+```
+
+The tracked `portable/entrypoint` wrappers and all other checkout files are left
+alone. The generated paths are ignored by Git. Move the whole checkout as a
+unit; `portable/result` is relative, and the runtime alias is checked again at
+each portable startup.
+
+The transformed closure is a runtime artifact only. Its store paths and content
+hashes no longer describe the copied bytes, so do not use it for Nix builds,
+substitution, signature verification, garbage collection, or other Nix store
+operations. This mechanism has been validated for the project's current Linux
+closure but is not a claim that every Nix package is relocatable.
+
 ## Customization
 
 ### Adding Packages

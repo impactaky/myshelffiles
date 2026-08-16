@@ -4,7 +4,8 @@
 SCRIPT_DIR="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)"
 
 # Source the environment setup
-. "$SCRIPT_DIR/env.sh"
+# shellcheck disable=SC1090
+. "${SHELFFILES_ENV_FILE:-$SCRIPT_DIR/env.sh}" || exit $?
 
 # Execute fish
 if [ ! -e "$SHELFFILES/result" ] && [ ! -e "$SHELFFILES/result_docker" ] ; then
