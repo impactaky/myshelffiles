@@ -5,18 +5,8 @@ SCRIPT_DIR="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)"
 SHELFFILES="$(CDPATH='' cd -- "$SCRIPT_DIR/.." && pwd)"
 export SHELFFILES="$SHELFFILES"
 
-# Source the environment setup. The override is a one-shot handoff from a
-# portable wrapper; the ordinary path retains its original source semantics.
-if [ -n "${SHELFFILES_ENV_FILE:-}" ]; then
-    shelffiles_env_file=$SHELFFILES_ENV_FILE
-    # shellcheck disable=SC1090
-    . "$shelffiles_env_file"
-    shelffiles_env_status=$?
-    unset SHELFFILES_ENV_FILE
-    [ "$shelffiles_env_status" -eq 0 ] || exit "$shelffiles_env_status"
-else
-    . "$SCRIPT_DIR/env.sh"
-fi
+# Source the environment setup
+. "$SCRIPT_DIR/env.sh"
 
 # Set ZDOTDIR if not already set
 [ -z "$ZDOTDIR" ] && export ZDOTDIR="$XDG_CONFIG_HOME/zsh"

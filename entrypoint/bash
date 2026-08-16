@@ -3,18 +3,8 @@
 # Get the absolute path of the script directory
 SCRIPT_DIR="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)"
 
-# Source the environment setup. The override is a one-shot handoff from a
-# portable wrapper; the ordinary path retains its original source semantics.
-if [ -n "${SHELFFILES_ENV_FILE:-}" ]; then
-    shelffiles_env_file=$SHELFFILES_ENV_FILE
-    # shellcheck disable=SC1090
-    . "$shelffiles_env_file"
-    shelffiles_env_status=$?
-    unset SHELFFILES_ENV_FILE
-    [ "$shelffiles_env_status" -eq 0 ] || exit "$shelffiles_env_status"
-else
-    . "$SCRIPT_DIR/env.sh"
-fi
+# Source the environment setup
+. "$SCRIPT_DIR/env.sh"
 
 mkdir -p "$XDG_STATE_HOME"/bash
 export HISTFILE="$XDG_STATE_HOME"/bash/history

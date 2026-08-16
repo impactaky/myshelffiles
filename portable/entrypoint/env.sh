@@ -4,7 +4,7 @@
 # Load the ordinary environment first so config, state, and XDG behavior remain
 # shared with the normal entrypoints.
 PORTABLE_ENTRYPOINT_DIR="$(
-  CDPATH='' cd -- "$(dirname -- "${SHELFFILES_ENV_FILE:?portable environment file is not set}")" && pwd -P
+  CDPATH='' cd -- "$(dirname -- "${shelffiles_env_file:?portable environment file is not set}")" && pwd -P
 )"
 PORTABLE_ROOT="$(CDPATH='' cd -- "$PORTABLE_ENTRYPOINT_DIR/../.." && pwd -P)"
 

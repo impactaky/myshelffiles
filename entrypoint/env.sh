@@ -1,5 +1,21 @@
 # shellcheck shell=sh
 
+# Portable wrappers can select an environment extension for this invocation.
+# Consume the exported handoff before sourcing it so it does not leak into the
+# launched shell. The selected extension is responsible for loading this file
+# again without the handoff to get the ordinary environment first.
+if [ -n "${SHELFFILES_ENV_FILE:-}" ]; then
+    shelffiles_env_file=$SHELFFILES_ENV_FILE
+    unset SHELFFILES_ENV_FILE
+    # shellcheck disable=SC1090
+    . "$shelffiles_env_file"
+    shelffiles_env_status=$?
+    unset shelffiles_env_file
+    [ "$shelffiles_env_status" -eq 0 ] || exit "$shelffiles_env_status"
+    unset shelffiles_env_status
+    return 0
+fi
+
 SCRIPT_DIR="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)"
 SHELFFILES="$(CDPATH='' cd -- "$SCRIPT_DIR/.." && pwd)"
 export SHELFFILES="$SHELFFILES"
