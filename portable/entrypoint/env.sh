@@ -125,6 +125,22 @@ activate_portable_environment \
   return "$portable_status"
 }
 
+portable_ca_bundle="$PORTABLE_RESULT/etc/ssl/certs/ca-bundle.crt"
+if [ "${shelffiles_default_ssl_cert_file:-0}" = 1 ]; then
+  SSL_CERT_FILE=$portable_ca_bundle
+fi
+if [ "${shelffiles_default_nix_ssl_cert_file:-0}" = 1 ]; then
+  NIX_SSL_CERT_FILE=$portable_ca_bundle
+fi
+if [ "${shelffiles_default_system_certificate_path:-0}" = 1 ]; then
+  SYSTEM_CERTIFICATE_PATH=$portable_ca_bundle
+fi
+export SSL_CERT_FILE NIX_SSL_CERT_FILE SYSTEM_CERTIFICATE_PATH
+unset portable_ca_bundle \
+  shelffiles_default_ssl_cert_file \
+  shelffiles_default_nix_ssl_cert_file \
+  shelffiles_default_system_certificate_path
+
 # Consumed by the ordinary shell entrypoint after this sourced extension
 # returns. Keep it unexported so it does not leak into the launched shell.
 # shellcheck disable=SC2034

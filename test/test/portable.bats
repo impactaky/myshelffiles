@@ -64,10 +64,14 @@ create_export_fixture() {
   export FAKE_DEPENDENCY_PATH="$dependency_path"
 
   mkdir -p "$result_path/bin" "$dependency_path/lib"
+  mkdir -p "$result_path/etc/ssl/certs"
+  printf 'test CA bundle\n' >"$result_path/etc/ssl/certs/ca-bundle.crt"
   printf 'binary-prefix\0/nix/store\0binary-suffix\n' >"$dependency_path/lib/value"
   # shellcheck disable=SC2016
   printf '#!/bin/sh\nprintf "SHELL=%%s\\nPATH=%%s\\nSHELFFILES=%%s\\nSHELFFILES_ENV_FILE=%%s\\n" "$(basename "$0")" "$PATH" "$SHELFFILES" "${SHELFFILES_ENV_FILE-unset}"\n' \
     >"$result_path/bin/shell-template"
+  # shellcheck disable=SC2016
+  printf 'printf "SSL_CERT_FILE=%%s\\nNIX_SSL_CERT_FILE=%%s\\nSYSTEM_CERTIFICATE_PATH=%%s\\n" "${SSL_CERT_FILE-unset}" "${NIX_SSL_CERT_FILE-unset}" "${SYSTEM_CERTIFICATE_PATH-unset}"\\n[ -r "${SSL_CERT_FILE:-}" ] && printf "SSL_CERT_FILE_READABLE=yes\\n" || printf "SSL_CERT_FILE_READABLE=no\\n"\\n[ -r "${NIX_SSL_CERT_FILE:-}" ] && printf "NIX_SSL_CERT_FILE_READABLE=yes\\n" || printf "NIX_SSL_CERT_FILE_READABLE=no\\n"\\n[ -r "${SYSTEM_CERTIFICATE_PATH:-}" ] && printf "SYSTEM_CERTIFICATE_PATH_READABLE=yes\\n" || printf "SYSTEM_CERTIFICATE_PATH_READABLE=no\\n"\\n' >>"$result_path/bin/shell-template"
   chmod 0755 "$result_path/bin/shell-template"
   for shell_name in bash fish zsh; do
     cp -a "$result_path/bin/shell-template" "$result_path/bin/$shell_name"
@@ -93,6 +97,75 @@ donor_digest() {
     find "$result_path" "$dependency_path" -type l -exec sh -c \
       'for link do printf "%s -> %s\\n" "$link" "$(readlink "$link")"; done' sh {} +
   } | LC_ALL=C sort | sha256sum
+}
+
+assert_default_certificates() {
+  expected_ca=$1
+  [[ "$output" == *"SSL_CERT_FILE=$expected_ca"* ]]
+  [[ "$output" == *"NIX_SSL_CERT_FILE=$expected_ca"* ]]
+  [[ "$output" == *"SYSTEM_CERTIFICATE_PATH=$expected_ca"* ]]
+  [[ "$output" == *"SSL_CERT_FILE_READABLE=yes"* ]]
+  [[ "$output" == *"NIX_SSL_CERT_FILE_READABLE=yes"* ]]
+  [[ "$output" == *"SYSTEM_CERTIFICATE_PATH_READABLE=yes"* ]]
+}
+
+@test "portable certificate defaults use the readable portable result bundle for unset and empty values" {
+  require_writable_nix_store
+  require_alias_available "$runtime_prefix"
+  create_export_fixture
+  run env PATH="$fake_bin:$PATH" SHELFFILES_PORTABLE_PREFIX="$runtime_prefix" \
+    "$checkout/utils/create_portable.sh"
+  [ "$status" -eq 0 ]
+  expected_ca="$checkout/portable/result/etc/ssl/certs/ca-bundle.crt"
+
+  run env -u SSL_CERT_FILE -u NIX_SSL_CERT_FILE -u SYSTEM_CERTIFICATE_PATH \
+    PATH="$fake_bin:$PATH" "$checkout/portable/entrypoint/bash"
+  echo "$output"
+  [ "$status" -eq 0 ]
+  assert_default_certificates "$expected_ca"
+
+  run env SSL_CERT_FILE= NIX_SSL_CERT_FILE= SYSTEM_CERTIFICATE_PATH= \
+    PATH="$fake_bin:$PATH" "$checkout/portable/entrypoint/bash"
+  echo "$output"
+  [ "$status" -eq 0 ]
+  assert_default_certificates "$expected_ca"
+}
+
+@test "portable certificate variables preserve each non-empty incoming value independently" {
+  require_writable_nix_store
+  require_alias_available "$runtime_prefix"
+  create_export_fixture
+  run env PATH="$fake_bin:$PATH" SHELFFILES_PORTABLE_PREFIX="$runtime_prefix" \
+    "$checkout/utils/create_portable.sh"
+  [ "$status" -eq 0 ]
+  expected_ca="$checkout/portable/result/etc/ssl/certs/ca-bundle.crt"
+
+  for preserved_variable in SSL_CERT_FILE NIX_SSL_CERT_FILE SYSTEM_CERTIFICATE_PATH; do
+    custom_value="/caller/$preserved_variable.pem"
+    run env -u SSL_CERT_FILE -u NIX_SSL_CERT_FILE -u SYSTEM_CERTIFICATE_PATH \
+      "$preserved_variable=$custom_value" PATH="$fake_bin:$PATH" \
+      "$checkout/portable/entrypoint/bash"
+    echo "$output"
+    [ "$status" -eq 0 ]
+
+    case "$preserved_variable" in
+      SSL_CERT_FILE)
+        [[ "$output" == *"SSL_CERT_FILE=$custom_value"* ]]
+        [[ "$output" == *"NIX_SSL_CERT_FILE=$expected_ca"* ]]
+        [[ "$output" == *"SYSTEM_CERTIFICATE_PATH=$expected_ca"* ]]
+        ;;
+      NIX_SSL_CERT_FILE)
+        [[ "$output" == *"SSL_CERT_FILE=$expected_ca"* ]]
+        [[ "$output" == *"NIX_SSL_CERT_FILE=$custom_value"* ]]
+        [[ "$output" == *"SYSTEM_CERTIFICATE_PATH=$expected_ca"* ]]
+        ;;
+      SYSTEM_CERTIFICATE_PATH)
+        [[ "$output" == *"SSL_CERT_FILE=$expected_ca"* ]]
+        [[ "$output" == *"NIX_SSL_CERT_FILE=$expected_ca"* ]]
+        [[ "$output" == *"SYSTEM_CERTIFICATE_PATH=$custom_value"* ]]
+        ;;
+    esac
+  done
 }
 
 @test "environment-configured export rewrites and records the prefix without changing its donor" {

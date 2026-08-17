@@ -55,3 +55,28 @@ if [ -f "$USER_ENV_FILE" ]; then
   # shellcheck disable=SC1090
   . "$USER_ENV_FILE"
 fi
+
+# Provide the packaged CA bundle to TLS clients unless the caller or user
+# configuration supplied a non-empty value. Keep unexported markers so the
+# portable extension can replace only defaults established here.
+unset shelffiles_default_ssl_cert_file \
+  shelffiles_default_nix_ssl_cert_file \
+  shelffiles_default_system_certificate_path
+shelffiles_ca_bundle="$SHELFFILES/result/etc/ssl/certs/ca-bundle.crt"
+# shellcheck disable=SC2034
+if [ -z "${SSL_CERT_FILE:-}" ]; then
+  SSL_CERT_FILE=$shelffiles_ca_bundle
+  shelffiles_default_ssl_cert_file=1
+fi
+# shellcheck disable=SC2034
+if [ -z "${NIX_SSL_CERT_FILE:-}" ]; then
+  NIX_SSL_CERT_FILE=$shelffiles_ca_bundle
+  shelffiles_default_nix_ssl_cert_file=1
+fi
+# shellcheck disable=SC2034
+if [ -z "${SYSTEM_CERTIFICATE_PATH:-}" ]; then
+  SYSTEM_CERTIFICATE_PATH=$shelffiles_ca_bundle
+  shelffiles_default_system_certificate_path=1
+fi
+export SSL_CERT_FILE NIX_SSL_CERT_FILE SYSTEM_CERTIFICATE_PATH
+unset shelffiles_ca_bundle

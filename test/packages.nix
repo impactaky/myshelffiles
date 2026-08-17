@@ -1,4 +1,7 @@
 pkgs: with pkgs; [
+  # Certificate bundle
+  cacert
+
   # Test shells
   fish # Friendly Interactive Shell
   zsh # Z Shell

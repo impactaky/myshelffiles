@@ -2,6 +2,7 @@ pkgs: with pkgs; [
   _1password-cli
   argc
   atuin
+  cacert
   curl
   deno
   direnv
