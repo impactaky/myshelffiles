@@ -72,7 +72,9 @@ The ordinary `entrypoint/*` commands remain unchanged by default and continue
 to use the ordinary `result`. Both modes share this checkout's `config`,
 `cache`, `share`, and `state` directories. The portable wrappers source the
 ordinary environment setup first, then place `portable/result/bin` before the
-ordinary result in `PATH`.
+ordinary result in `PATH`. Once the portable artifact has been validated, the
+portable wrappers launch it directly and never fall back to the ordinary
+`launch_in_bwrap.sh` path when `result` and `result_docker` are absent.
 
 ### Relocation behavior and regeneration
 

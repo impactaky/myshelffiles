@@ -124,3 +124,8 @@ activate_portable_environment \
   portable_status=$?
   return "$portable_status"
 }
+
+# Consumed by the ordinary shell entrypoint after this sourced extension
+# returns. Keep it unexported so it does not leak into the launched shell.
+# shellcheck disable=SC2034
+shelffiles_portable_active=1

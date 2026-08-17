@@ -15,7 +15,8 @@ export SHELFFILES="$SHELFFILES"
 export USER_ZDOTDIR="$XDG_CONFIG_HOME/zsh"
 
 # Execute zsh
-if [ ! -e "$SHELFFILES/result" ] && [ ! -e "$SHELFFILES/result_docker" ] ; then
+if [ "${shelffiles_portable_active:-0}" != 1 ] &&
+    [ ! -e "$SHELFFILES/result" ] && [ ! -e "$SHELFFILES/result_docker" ] ; then
     exec "$SCRIPT_DIR/launch_in_bwrap.sh" zsh "$@"
 fi
 exec zsh "$@"

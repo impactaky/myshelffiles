@@ -262,6 +262,36 @@ EOF
   done
 }
 
+@test "portable wrappers never fall back to bwrap when ordinary results are absent" {
+  require_writable_nix_store
+  require_alias_available "$runtime_prefix"
+  create_export_fixture
+  run env PATH="$fake_bin:$PATH" SHELFFILES_PORTABLE_PREFIX="$runtime_prefix" \
+    "$checkout/utils/create_portable.sh"
+  [ "$status" -eq 0 ]
+
+  cat >"$checkout/entrypoint/launch_in_bwrap.sh" <<'EOF'
+#!/bin/sh
+printf 'BWRAP=%s\n' "$1"
+exit 91
+EOF
+  chmod 0755 "$checkout/entrypoint/launch_in_bwrap.sh"
+  rm -- "$checkout/result"
+
+  for shell_name in bash fish zsh; do
+    run env PATH="$fake_bin:$PATH" "$checkout/portable/entrypoint/$shell_name"
+    echo "$output"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"SHELL=$shell_name"* ]]
+    [[ "$output" != *"BWRAP="* ]]
+
+    run env PATH="$fake_bin:$PATH" "$checkout/entrypoint/$shell_name"
+    echo "$output"
+    [ "$status" -eq 91 ]
+    [[ "$output" == *"BWRAP=$shell_name"* ]]
+  done
+}
+
 @test "configured portable alias conflicts retain status 73 and are never replaced" {
   require_writable_nix_store
   require_alias_available "$runtime_prefix"
