@@ -9,25 +9,31 @@ setup() {
   test_root="$(mktemp -d /tmp/shelffiles-portable-test.XXXXXX)"
   checkout="$test_root/checkout"
   fake_bin="$test_root/bin"
-  fixed_alias_token="shelffiles-portable-test-${BATS_TEST_NUMBER}-$$"
+  alias_token="$(printf '%04d' "$(((BATS_TEST_NUMBER * 97 + $$) % 10000))")"
+  runtime_prefix="/tmp/a$alias_token"
+  config_prefix="/tmp/b$alias_token"
+  other_prefix="/tmp/c$alias_token"
+  wrong_alias_target="/tmp/shelffiles-portable-wrong-$alias_token-$$"
   mkdir -p "$checkout" "$fake_bin"
   cp -a "$repo_root/entrypoint" "$repo_root/portable" "$repo_root/utils" "$checkout/"
 }
 
 teardown() {
-  if [ -L /tmp/impac ]; then
-    alias_target="$(readlink /tmp/impac)"
-    case "$alias_target" in
-      "$checkout/portable/nix/store"|"/tmp/$fixed_alias_token-wrong")
-        rm -- /tmp/impac
-        ;;
-    esac
-  elif [ -f /tmp/impac ] && [ "$(cat /tmp/impac 2>/dev/null)" = "$fixed_alias_token" ]; then
-    rm -- /tmp/impac
-  elif [ -d /tmp/impac ] && [ -f "/tmp/impac/$fixed_alias_token" ]; then
-    rm -- "/tmp/impac/$fixed_alias_token"
-    rmdir /tmp/impac
-  fi
+  for alias_path in "$runtime_prefix" "$config_prefix" "$other_prefix"; do
+    if [ -L "$alias_path" ]; then
+      alias_target="$(readlink "$alias_path")"
+      case "$alias_target" in
+        "$checkout/portable/nix/store"|"$wrong_alias_target")
+          rm -- "$alias_path"
+          ;;
+      esac
+    elif [ -f "$alias_path" ] && [ "$(cat "$alias_path" 2>/dev/null)" = "$alias_token" ]; then
+      rm -- "$alias_path"
+    elif [ -d "$alias_path" ] && [ -f "$alias_path/$alias_token" ]; then
+      rm -- "$alias_path/$alias_token"
+      rmdir "$alias_path"
+    fi
+  done
 
   if [ -n "${result_path:-}" ] || [ -n "${dependency_path:-}" ]; then
     chmod -R u+w -- "${result_path:-/nonexistent}" \
@@ -41,6 +47,13 @@ teardown() {
 require_writable_nix_store() {
   mkdir -p /nix/store 2>/dev/null || skip 'requires an isolated writable /nix/store (provided by test/Dockerfile)'
   [ -w /nix/store ] || skip 'requires an isolated writable /nix/store (provided by test/Dockerfile)'
+}
+
+require_alias_available() {
+  alias_path=$1
+  if [ -e "$alias_path" ] || [ -L "$alias_path" ]; then
+    skip "pre-existing $alias_path is left untouched"
+  fi
 }
 
 create_export_fixture() {
@@ -82,37 +95,111 @@ donor_digest() {
   } | LC_ALL=C sort | sha256sum
 }
 
-@test "export rewrites a small closure without changing its donor" {
+@test "environment-configured export rewrites and records the prefix without changing its donor" {
   require_writable_nix_store
   create_export_fixture
   donor_before="$(donor_digest)"
   printf 'keep entrypoint\n' >"$checkout/portable/entrypoint/sentinel"
   printf 'keep outside\n' >"$checkout/outside-sentinel"
 
-  run env PATH="$fake_bin:$PATH" "$checkout/utils/create_portable.sh"
+  run env PATH="$fake_bin:$PATH" SHELFFILES_PORTABLE_PREFIX="$runtime_prefix" \
+    "$checkout/utils/create_portable.sh"
   echo "$output"
   [ "$status" -eq 0 ]
   [[ "$output" == *"Closure paths copied: 2"* ]]
+  [[ "$output" == *"Runtime prefix: $runtime_prefix"* ]]
   [ "$(donor_digest)" = "$donor_before" ]
 
   copied_result="$checkout/portable/nix/store/${result_path##*/}"
   copied_dependency="$checkout/portable/nix/store/${dependency_path##*/}"
-  grep -aFq /tmp/impac "$copied_dependency/lib/value"
+  grep -aFq "$runtime_prefix" "$copied_dependency/lib/value"
   run grep -aFq /nix/store "$copied_dependency/lib/value"
   [ "$status" -ne 0 ]
-  [ "$(readlink "$copied_result/dependency-link")" = "/tmp/impac/${dependency_path##*/}/lib/value" ]
+  [ "$(readlink "$copied_result/dependency-link")" = "$runtime_prefix/${dependency_path##*/}/lib/value" ]
+  [ "$(cat "$checkout/portable/nix/runtime-prefix")" = "$runtime_prefix" ]
   [ -x "$copied_result/bin/bash" ]
   [ "$(readlink "$checkout/portable/result")" = "nix/store/${result_path##*/}" ]
   [[ "$(readlink "$checkout/portable/result")" != /* ]]
 
   chmod -R u+w "$checkout/portable/nix"
   touch "$checkout/portable/nix/discard-on-regeneration"
-  run env PATH="$fake_bin:$PATH" "$checkout/utils/create_portable.sh"
+  run env PATH="$fake_bin:$PATH" SHELFFILES_PORTABLE_PREFIX="$runtime_prefix" \
+    "$checkout/utils/create_portable.sh"
   [ "$status" -eq 0 ]
   [ ! -e "$checkout/portable/nix/discard-on-regeneration" ]
   [ -f "$checkout/portable/entrypoint/sentinel" ]
   [ -f "$checkout/outside-sentinel" ]
   [ "$(donor_digest)" = "$donor_before" ]
+}
+
+@test "config fallback is unexported and process environment including empty takes precedence" {
+  require_writable_nix_store
+  create_export_fixture
+  mkdir -p "$checkout/config"
+  printf 'SHELFFILES_PORTABLE_PREFIX=%s\n' "$config_prefix" >"$checkout/config/shelffiles.conf"
+
+  run env -u SHELFFILES_PORTABLE_PREFIX PATH="$fake_bin:$PATH" \
+    "$checkout/utils/create_portable.sh"
+  echo "$output"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$checkout/portable/nix/runtime-prefix")" = "$config_prefix" ]
+
+  run env PATH="$fake_bin:$PATH" SHELFFILES_PORTABLE_PREFIX="$runtime_prefix" \
+    "$checkout/utils/create_portable.sh"
+  echo "$output"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$checkout/portable/nix/runtime-prefix")" = "$runtime_prefix" ]
+
+  chmod u+w "$checkout/portable/nix"
+  touch "$checkout/portable/nix/keep-after-empty"
+  run env PATH="$fake_bin:$PATH" SHELFFILES_PORTABLE_PREFIX= \
+    "$checkout/utils/create_portable.sh"
+  echo "$output"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"must match /tmp/[A-Za-z0-9]{5}"* ]]
+  [ -f "$checkout/portable/nix/keep-after-empty" ]
+  [ "$(cat "$checkout/portable/nix/runtime-prefix")" = "$runtime_prefix" ]
+}
+
+@test "missing and invalid prefixes fail before replacing an existing export" {
+  require_writable_nix_store
+  create_export_fixture
+  run env PATH="$fake_bin:$PATH" SHELFFILES_PORTABLE_PREFIX="$runtime_prefix" \
+    "$checkout/utils/create_portable.sh"
+  [ "$status" -eq 0 ]
+  chmod u+w "$checkout/portable/nix"
+  touch "$checkout/portable/nix/keep-after-invalid"
+  result_target="$(readlink "$checkout/portable/result")"
+
+  run env -u SHELFFILES_PORTABLE_PREFIX PATH="$fake_bin:$PATH" \
+    "$checkout/utils/create_portable.sh"
+  echo "$output"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"SHELFFILES_PORTABLE_PREFIX is required"* ]]
+  [ -f "$checkout/portable/nix/keep-after-invalid" ]
+  [ "$(readlink "$checkout/portable/result")" = "$result_target" ]
+
+  invalid_prefixes=(
+    ''
+    '/tmp/abcd'
+    '/tmp/abcdef'
+    '/tmp/ab_cd'
+    '/tmp/ab cd'
+    '/tmp/ab/12'
+    'tmp/abcde'
+    '/var/abcde'
+    '/tmp/é1234'
+  )
+  for invalid_prefix in "${invalid_prefixes[@]}"; do
+    run env PATH="$fake_bin:$PATH" SHELFFILES_PORTABLE_PREFIX="$invalid_prefix" \
+      "$checkout/utils/create_portable.sh"
+    echo "$output"
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"must match /tmp/[A-Za-z0-9]{5}"* ]]
+    [ -f "$checkout/portable/nix/keep-after-invalid" ]
+    [ "$(cat "$checkout/portable/nix/runtime-prefix")" = "$runtime_prefix" ]
+    [ "$(readlink "$checkout/portable/result")" = "$result_target" ]
+  done
 }
 
 @test "residual source references fail before portable result is created" {
@@ -126,7 +213,8 @@ exit 0
 EOF
   chmod 0755 "$fake_bin/sed"
 
-  run env PATH="$fake_bin:$PATH" "$checkout/utils/create_portable.sh"
+  run env PATH="$fake_bin:$PATH" SHELFFILES_PORTABLE_PREFIX="$runtime_prefix" \
+    "$checkout/utils/create_portable.sh"
   echo "$output"
   [ "$status" -ne 0 ]
   [[ "$output" == *"Residual regular-file reference"* ]]
@@ -136,53 +224,111 @@ EOF
   [ "$(donor_digest)" = "$donor_before" ]
 }
 
-@test "ordinary entrypoints stay ordinary and portable wrappers select portable PATH" {
+@test "ordinary entrypoints stay ordinary and every portable wrapper uses the recorded prefix" {
   require_writable_nix_store
+  require_alias_available "$runtime_prefix"
+  require_alias_available "$config_prefix"
+  require_alias_available "$other_prefix"
   create_export_fixture
-  run env PATH="$fake_bin:$PATH" "$checkout/utils/create_portable.sh"
+  run env PATH="$fake_bin:$PATH" SHELFFILES_PORTABLE_PREFIX="$runtime_prefix" \
+    "$checkout/utils/create_portable.sh"
   [ "$status" -eq 0 ]
+  mkdir -p "$checkout/config"
+  printf 'SHELFFILES_PORTABLE_PREFIX=%s\n' "$config_prefix" >"$checkout/config/shelffiles.conf"
 
   for shell_name in bash fish zsh; do
-    run env PATH="$fake_bin:$PATH" "$checkout/entrypoint/$shell_name"
+    run env PATH="$fake_bin:$PATH" SHELFFILES_PORTABLE_PREFIX="$other_prefix" \
+      "$checkout/entrypoint/$shell_name"
     echo "$output"
     [ "$status" -eq 0 ]
     [[ "$output" == *":$checkout/result/bin:"* ]]
     [[ "$output" != *"$checkout/portable/result/bin"* ]]
   done
 
-  if [ -e /tmp/impac ] || [ -L /tmp/impac ]; then
-    skip 'pre-existing /tmp/impac is left untouched'
-  fi
   expected_store="$checkout/portable/nix/store"
   for shell_name in bash fish zsh; do
-    run env PATH="$fake_bin:$PATH" "$checkout/portable/entrypoint/$shell_name"
+    run env PATH="$fake_bin:$PATH" SHELFFILES_PORTABLE_PREFIX="$other_prefix" \
+      "$checkout/portable/entrypoint/$shell_name"
     echo "$output"
     [ "$status" -eq 0 ]
-    [ "$(readlink /tmp/impac)" = "$expected_store" ]
+    [ "$(readlink "$runtime_prefix")" = "$expected_store" ]
+    [ ! -e "$config_prefix" ]
+    [ ! -L "$config_prefix" ]
+    [ ! -e "$other_prefix" ]
+    [ ! -L "$other_prefix" ]
     [[ "$output" == *"PATH=$checkout/portable/result/bin:"* ]]
     [[ "$output" == *":$checkout/result/bin:"* ]]
     [[ "$output" == *"SHELFFILES_ENV_FILE=unset"* ]]
   done
+}
 
-  rm -- /tmp/impac
-  ln -s "/tmp/$fixed_alias_token-wrong" /tmp/impac
+@test "configured portable alias conflicts retain status 73 and are never replaced" {
+  require_writable_nix_store
+  require_alias_available "$runtime_prefix"
+  create_export_fixture
+  run env PATH="$fake_bin:$PATH" SHELFFILES_PORTABLE_PREFIX="$runtime_prefix" \
+    "$checkout/utils/create_portable.sh"
+  [ "$status" -eq 0 ]
+
+  ln -s "$wrong_alias_target" "$runtime_prefix"
   run env PATH="$fake_bin:$PATH" "$checkout/portable/entrypoint/bash"
   echo "$output"
   [ "$status" -eq 73 ]
-  [ "$(readlink /tmp/impac)" = "/tmp/$fixed_alias_token-wrong" ]
-  rm -- /tmp/impac
+  [ "$(readlink "$runtime_prefix")" = "$wrong_alias_target" ]
+  rm -- "$runtime_prefix"
 
-  printf %s "$fixed_alias_token" >/tmp/impac
+  printf %s "$alias_token" >"$runtime_prefix"
   run env PATH="$fake_bin:$PATH" "$checkout/portable/entrypoint/bash"
+  echo "$output"
   [ "$status" -eq 73 ]
-  [ "$(cat /tmp/impac)" = "$fixed_alias_token" ]
-  rm -- /tmp/impac
+  [ "$(cat "$runtime_prefix")" = "$alias_token" ]
+  rm -- "$runtime_prefix"
 
-  mkdir /tmp/impac
-  touch "/tmp/impac/$fixed_alias_token"
+  mkdir "$runtime_prefix"
+  touch "$runtime_prefix/$alias_token"
   run env PATH="$fake_bin:$PATH" "$checkout/portable/entrypoint/bash"
+  echo "$output"
   [ "$status" -eq 73 ]
-  [ -f "/tmp/impac/$fixed_alias_token" ]
+  [ -f "$runtime_prefix/$alias_token" ]
+}
+
+@test "missing malformed and invalid prefix metadata prevent alias creation and shell launch" {
+  require_writable_nix_store
+  require_alias_available "$runtime_prefix"
+  create_export_fixture
+  run env PATH="$fake_bin:$PATH" SHELFFILES_PORTABLE_PREFIX="$runtime_prefix" \
+    "$checkout/utils/create_portable.sh"
+  [ "$status" -eq 0 ]
+  metadata="$checkout/portable/nix/runtime-prefix"
+  chmod u+w "$checkout/portable/nix"
+  rm -- "$metadata"
+
+  run env PATH="$fake_bin:$PATH" SHELFFILES_PORTABLE_PREFIX="$other_prefix" \
+    "$checkout/portable/entrypoint/bash"
+  echo "$output"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"runtime prefix metadata is missing"* ]]
+  [[ "$output" != *"SHELL=bash"* ]]
+  [ ! -e "$runtime_prefix" ]
+  [ ! -L "$runtime_prefix" ]
+
+  printf '/tmp/abcd\n' >"$metadata"
+  run env PATH="$fake_bin:$PATH" "$checkout/portable/entrypoint/bash"
+  echo "$output"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"metadata must match /tmp/[A-Za-z0-9]{5}"* ]]
+  [[ "$output" != *"SHELL=bash"* ]]
+  [ ! -e "$runtime_prefix" ]
+  [ ! -L "$runtime_prefix" ]
+
+  printf '%s\n%s\n' "$runtime_prefix" "$other_prefix" >"$metadata"
+  run env PATH="$fake_bin:$PATH" "$checkout/portable/entrypoint/bash"
+  echo "$output"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"metadata must contain exactly one line"* ]]
+  [[ "$output" != *"SHELL=bash"* ]]
+  [ ! -e "$runtime_prefix" ]
+  [ ! -L "$runtime_prefix" ]
 }
 
 @test "ordinary entrypoints continue when ordinary user environment returns nonzero" {
@@ -201,13 +347,11 @@ EOF
 
 @test "portable wrappers reject a missing broken or misplaced result before launch" {
   require_writable_nix_store
+  require_alias_available "$runtime_prefix"
   create_export_fixture
-  run env PATH="$fake_bin:$PATH" "$checkout/utils/create_portable.sh"
+  run env PATH="$fake_bin:$PATH" SHELFFILES_PORTABLE_PREFIX="$runtime_prefix" \
+    "$checkout/utils/create_portable.sh"
   [ "$status" -eq 0 ]
-
-  if [ -e /tmp/impac ] || [ -L /tmp/impac ]; then
-    skip 'pre-existing /tmp/impac is left untouched'
-  fi
 
   rm -- "$checkout/portable/result"
   run env PATH="$fake_bin:$PATH" "$checkout/portable/entrypoint/bash"
@@ -215,16 +359,17 @@ EOF
   [ "$status" -ne 0 ]
   [[ "$output" == *"Portable result is missing or broken"* ]]
   [[ "$output" != *"SHELL=bash"* ]]
-  [ ! -e /tmp/impac ]
-  [ ! -L /tmp/impac ]
+  [ ! -e "$runtime_prefix" ]
+  [ ! -L "$runtime_prefix" ]
 
   ln -s nix/store/missing-result "$checkout/portable/result"
   run env PATH="$fake_bin:$PATH" "$checkout/portable/entrypoint/bash"
+  echo "$output"
   [ "$status" -ne 0 ]
   [[ "$output" == *"Portable result is missing or broken"* ]]
   [[ "$output" != *"SHELL=bash"* ]]
-  [ ! -e /tmp/impac ]
-  [ ! -L /tmp/impac ]
+  [ ! -e "$runtime_prefix" ]
+  [ ! -L "$runtime_prefix" ]
 
   rm -- "$checkout/portable/result"
   ln -s ../result "$checkout/portable/result"
@@ -233,6 +378,6 @@ EOF
   [ "$status" -ne 0 ]
   [[ "$output" == *"Portable result resolves outside the portable store"* ]]
   [[ "$output" != *"SHELL=bash"* ]]
-  [ ! -e /tmp/impac ]
-  [ ! -L /tmp/impac ]
+  [ ! -e "$runtime_prefix" ]
+  [ ! -L "$runtime_prefix" ]
 }

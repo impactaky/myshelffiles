@@ -65,8 +65,44 @@ activate_portable_environment() {
   export PATH="$portable_result/bin:$PATH"
 }
 
+read_portable_prefix() {
+  metadata_path=$1
+  portable_prefix=
+  unexpected_line=
+
+  if [ ! -f "$metadata_path" ] || [ -L "$metadata_path" ]; then
+    printf 'Portable runtime prefix metadata is missing: %s\n' \
+      "$metadata_path" >&2
+    return 1
+  fi
+
+  if ! {
+    IFS= read -r portable_prefix &&
+      ! IFS= read -r unexpected_line &&
+      [ -z "$unexpected_line" ]
+  } <"$metadata_path"; then
+    printf 'Portable runtime prefix metadata must contain exactly one line: %s\n' \
+      "$metadata_path" >&2
+    return 1
+  fi
+
+  case "$portable_prefix" in
+    /tmp/[A-Za-z0-9][A-Za-z0-9][A-Za-z0-9][A-Za-z0-9][A-Za-z0-9]) ;;
+    *)
+      printf 'Portable runtime prefix metadata must match /tmp/[A-Za-z0-9]{5}: %s\n' \
+        "$metadata_path" >&2
+      return 1
+      ;;
+  esac
+
+  printf '%s\n' "$portable_prefix"
+}
+
 PORTABLE_STORE="$(CDPATH='' cd -- "$PORTABLE_ROOT/portable/nix/store" 2>/dev/null && pwd -P)" || {
   printf 'Portable store is missing. Run utils/create_portable.sh first.\n' >&2
+  return 1
+}
+PORTABLE_RUNTIME_PREFIX="$(read_portable_prefix "$PORTABLE_ROOT/portable/nix/runtime-prefix")" || {
   return 1
 }
 PORTABLE_RESULT="$PORTABLE_ROOT/portable/result"
@@ -84,7 +120,7 @@ case "$PORTABLE_RESULT_RESOLVED" in
 esac
 
 activate_portable_environment \
-  /tmp/impac "$PORTABLE_STORE" "$PORTABLE_RESULT" || {
+  "$PORTABLE_RUNTIME_PREFIX" "$PORTABLE_STORE" "$PORTABLE_RESULT" || {
   portable_status=$?
   return "$portable_status"
 }

@@ -5,7 +5,6 @@ set -euo pipefail
 # This script intentionally has no build step and never writes to /nix/store.
 
 readonly source_prefix=/nix/store
-readonly runtime_prefix=/tmp/impac
 script_dir="$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 readonly script_dir
 checkout_root="$(CDPATH='' cd -- "$script_dir/.." && pwd -P)"
@@ -19,6 +18,15 @@ readonly portable_result="$portable_root/result"
 fail() {
   printf 'Portable export failed: %s\n' "$1" >&2
   exit 1
+}
+
+validate_runtime_prefix() {
+  local prefix=$1
+  if [[ ! "$prefix" =~ ^/tmp/[A-Za-z0-9]{5}$ ]]; then
+    printf 'Portable export failed: SHELFFILES_PORTABLE_PREFIX must match /tmp/[A-Za-z0-9]{5}; got %q\n' \
+      "$prefix" >&2
+    exit 1
+  fi
 }
 
 cleanup_generated_path() {
@@ -38,6 +46,28 @@ cleanup_generated_path() {
       ;;
   esac
 }
+
+portable_prefix_from_environment=0
+environment_portable_prefix=
+if [[ ${SHELFFILES_PORTABLE_PREFIX+x} == x ]]; then
+  portable_prefix_from_environment=1
+  environment_portable_prefix=$SHELFFILES_PORTABLE_PREFIX
+fi
+
+if [[ -f "$checkout_root/config/shelffiles.conf" ]]; then
+  # shellcheck disable=SC1091
+  source "$checkout_root/config/shelffiles.conf"
+fi
+
+if ((portable_prefix_from_environment)); then
+  runtime_prefix=$environment_portable_prefix
+elif [[ ${SHELFFILES_PORTABLE_PREFIX+x} == x ]]; then
+  runtime_prefix=$SHELFFILES_PORTABLE_PREFIX
+else
+  fail 'SHELFFILES_PORTABLE_PREFIX is required in the process environment or config/shelffiles.conf'
+fi
+readonly runtime_prefix
+validate_runtime_prefix "$runtime_prefix"
 
 for tool in chmod cp dirname find grep ln mkdir mktemp readlink rm sed sort stat uname wc; do
   command -v "$tool" >/dev/null 2>&1 || fail "required command is missing: $tool"
@@ -158,6 +188,7 @@ fi
 
 copied_result="$portable_store/$result_name"
 [[ -d "$copied_result" ]] || fail "transformed result is missing: $copied_result"
+printf '%s\n' "$runtime_prefix" >"$portable_nix/runtime-prefix"
 chmod -R a-w -- "$portable_nix"
 ln -s "nix/store/$result_name" "$portable_result"
 

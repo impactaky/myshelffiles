@@ -32,11 +32,26 @@ Shelffiles is a portable environment configuration system that uses Nix to manag
 ## Portable runtime export (Linux)
 
 After the ordinary `nix build` succeeds, you can export that existing `result`
-closure into this checkout:
+closure into this checkout by choosing its required runtime prefix:
 
 ```bash
-./utils/create_portable.sh
+SHELFFILES_PORTABLE_PREFIX=/tmp/foo42 ./utils/create_portable.sh
 ```
+
+Alternatively, persist the setting in `config/shelffiles.conf` (it does not
+need to be exported):
+
+```sh
+SHELFFILES_PORTABLE_PREFIX=/tmp/foo42
+```
+
+`SHELFFILES_PORTABLE_PREFIX` has no default and must match exactly
+`/tmp/[A-Za-z0-9]{5}`. The complete path is therefore 10 ASCII bytes, the same
+length as `/nix/store`. A definition in the process environment wins over the
+configuration file, including an explicitly empty environment value; an empty
+or otherwise invalid winning value fails rather than falling back. When the
+process environment does not define the variable, the exporter uses an
+assignment from `config/shelffiles.conf`.
 
 The exporter requires Linux, an existing `result` that resolves to a
 `/nix/store/<hash>-...` directory, and `nix-store --query --requisites`
@@ -62,15 +77,20 @@ ordinary result in `PATH`.
 ### Relocation behavior and regeneration
 
 The exported closure replaces every literal `/nix/store` byte sequence in
-regular files and symlink targets with `/tmp/impac`. These prefixes are both
-exactly 10 bytes; the exporter verifies that precondition and rejects an export
-if any `/nix/store` literal remains.
+regular files and symlink targets with the selected runtime prefix. The exporter
+validates the prefix before removing an existing export, verifies the equal-byte
+length precondition, rejects an export if any `/nix/store` literal remains, and
+records the selected value in `portable/nix/runtime-prefix`.
 
-At portable startup, `/tmp/impac` must be a symlink to this checkout's absolute
-`portable/nix/store` path. The entrypoint creates it when absent and reuses it
-when already correct. If the path is a different symlink, a regular file, or a
-directory, the entrypoint prints a conflict and exits with status 73 without
-removing or replacing that object. Resolve the conflict yourself before retrying.
+At portable startup, the prefix recorded during export must be a symlink to this
+checkout's absolute `portable/nix/store` path. The entrypoint reads and validates
+the generated metadata; it does not select a new prefix from the current process
+environment or current configuration. Missing or malformed metadata stops
+startup before an alias is created or a shell is launched. The entrypoint creates
+the recorded alias when absent and reuses it when already correct. If the path is
+a different symlink, a regular file, or a directory, the entrypoint prints a
+conflict and exits with status 73 without removing or replacing that object.
+Resolve the conflict yourself before retrying.
 
 Running the exporter again deliberately removes and recreates only these
 generated paths:
@@ -81,9 +101,11 @@ portable/result
 ```
 
 The tracked `portable/entrypoint` wrappers and all other checkout files are left
-alone. The generated paths are ignored by Git. Move the whole checkout as a
-unit; `portable/result` is relative, and the runtime alias is checked again at
-each portable startup.
+alone. The generated paths, including the recorded prefix metadata, are ignored
+by Git. A later successful export may choose another valid prefix and regenerates
+both paths as a unit. Move the whole checkout as a unit; `portable/result` is
+relative, and the recorded runtime alias is checked again at each portable
+startup.
 
 The transformed closure is a runtime artifact only. Its store paths and content
 hashes no longer describe the copied bytes, so do not use it for Nix builds,
