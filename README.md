@@ -38,12 +38,18 @@ closure into this checkout by choosing its required runtime prefix:
 SHELFFILES_PORTABLE_PREFIX=/tmp/foo42 ./utils/create_portable.sh
 ```
 
-Alternatively, persist the setting in `config/shelffiles.conf` (it does not
-need to be exported):
+The exporter saves a valid process-environment prefix in
+`config/shelffiles.conf` after the export succeeds, so later runs need no
+variable:
 
-```sh
-SHELFFILES_PORTABLE_PREFIX=/tmp/foo42
+```bash
+./utils/create_portable.sh
 ```
+
+The saved assignment is marked as managed by `utils/create_portable.sh`.
+Unrelated settings, comments, and manually maintained prefix assignments are
+preserved. Repeated successful exports update the one managed assignment. A
+prefix read from the configuration file is not written back unnecessarily.
 
 `SHELFFILES_PORTABLE_PREFIX` has no default and must match exactly
 `/tmp/[A-Za-z0-9]{5}`. The complete path is therefore 10 ASCII bytes, the same
@@ -51,14 +57,15 @@ length as `/nix/store`. A definition in the process environment wins over the
 configuration file, including an explicitly empty environment value; an empty
 or otherwise invalid winning value fails rather than falling back. When the
 process environment does not define the variable, the exporter uses an
-assignment from `config/shelffiles.conf`.
+assignment from `config/shelffiles.conf`, whether manually maintained or
+previously saved by the exporter.
 
 The exporter requires Linux, an existing `result` that resolves to a
 `/nix/store/<hash>-...` directory, and `nix-store --query --requisites`
 (available either on `PATH` or in `result/bin`). It does not run another build,
-download packages, write to `/nix/store`, or change the ordinary `result`.
-Instead, it copies the complete runtime closure into `portable/nix/store` and
-creates a relative `portable/result` symlink.
+download packages, write to `/nix/store`, or change the ordinary `result`. It
+copies the required runtime closure into `portable/nix/store` and creates a
+relative `portable/result` symlink.
 
 Enter the exported environment with the portable wrappers:
 
@@ -80,9 +87,38 @@ portable wrappers launch it directly and never fall back to the ordinary
 
 The exported closure replaces every literal `/nix/store` byte sequence in
 regular files and symlink targets with the selected runtime prefix. The exporter
-validates the prefix before removing an existing export, verifies the equal-byte
-length precondition, rejects an export if any `/nix/store` literal remains, and
-records the selected value in `portable/nix/runtime-prefix`.
+validates the prefix and closure first, verifies the equal-byte-length
+precondition, rejects an entry if any `/nix/store` literal remains, and records
+the selected value in `portable/nix/runtime-prefix`.
+
+A completed export with the same recorded prefix is updated incrementally. The
+current `nix-store --query --requisites` output remains the inventory of record:
+entries already present under the same Nix store basename are reused without a
+recursive scan, copy, or rewrite. Each missing entry is copied under a temporary
+name, rewritten and residual-checked there, made read-only, and only then renamed
+to its final store basename. Existing exports made by earlier versions are
+eligible for this reuse when their recorded prefix and relative result structure
+show that export finalization completed.
+
+After every required entry is ready, the exporter switches `portable/result` to
+the current result and removes final-name entries no longer in the closure. A
+failed incremental update leaves the previously selected result usable and does
+not prune stale entries. Temporary entries from a failed or interrupted update
+are never reused and are removed by a later run. The summary reports reused,
+copied, and removed store path counts.
+
+A changed prefix or an incomplete prior export rebuilds the complete closure
+because every relocated literal must agree. Use `--force` to request the same
+complete rebuild deliberately even when the prefix is unchanged:
+
+```bash
+./utils/create_portable.sh --force
+```
+
+The exporter accepts no other arguments. Validation, copy, relocation, and
+residual-reference failures do not save an environment prefix. Prefix-change and
+forced rebuilds are prepared away from the active generated tree, so a failure
+during preparation does not replace the previous successful export.
 
 At portable startup, the prefix recorded during export must be a symlink to this
 checkout's absolute `portable/nix/store` path. The entrypoint reads and validates
@@ -94,20 +130,10 @@ a different symlink, a regular file, or a directory, the entrypoint prints a
 conflict and exits with status 73 without removing or replacing that object.
 Resolve the conflict yourself before retrying.
 
-Running the exporter again deliberately removes and recreates only these
-generated paths:
-
-```text
-portable/nix
-portable/result
-```
-
 The tracked `portable/entrypoint` wrappers and all other checkout files are left
 alone. The generated paths, including the recorded prefix metadata, are ignored
-by Git. A later successful export may choose another valid prefix and regenerates
-both paths as a unit. Move the whole checkout as a unit; `portable/result` is
-relative, and the recorded runtime alias is checked again at each portable
-startup.
+by Git. Move the whole checkout as a unit; `portable/result` is relative, and the
+recorded runtime alias is checked again at each portable startup.
 
 The transformed closure is a runtime artifact only. Its store paths and content
 hashes no longer describe the copied bytes, so do not use it for Nix builds,

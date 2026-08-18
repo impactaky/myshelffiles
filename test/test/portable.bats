@@ -179,7 +179,7 @@ assert_default_certificates() {
     "$checkout/utils/create_portable.sh"
   echo "$output"
   [ "$status" -eq 0 ]
-  [[ "$output" == *"Closure paths copied: 2"* ]]
+  [[ "$output" == *"Store paths copied: 2"* ]]
   [[ "$output" == *"Runtime prefix: $runtime_prefix"* ]]
   [ "$(donor_digest)" = "$donor_before" ]
 
@@ -194,12 +194,18 @@ assert_default_certificates() {
   [ "$(readlink "$checkout/portable/result")" = "nix/store/${result_path##*/}" ]
   [[ "$(readlink "$checkout/portable/result")" != /* ]]
 
-  chmod -R u+w "$checkout/portable/nix"
-  touch "$checkout/portable/nix/discard-on-regeneration"
+  result_inode="$(stat -c %i "$copied_result")"
+  dependency_inode="$(stat -c %i "$copied_dependency")"
+  portable_before="$(find "$checkout/portable/nix/store" -type f -exec sha256sum {} \; | LC_ALL=C sort | sha256sum)"
   run env PATH="$fake_bin:$PATH" SHELFFILES_PORTABLE_PREFIX="$runtime_prefix" \
     "$checkout/utils/create_portable.sh"
   [ "$status" -eq 0 ]
-  [ ! -e "$checkout/portable/nix/discard-on-regeneration" ]
+  [[ "$output" == *"Store paths reused: 2"* ]]
+  [[ "$output" == *"Store paths copied: 0"* ]]
+  [[ "$output" == *"Store paths removed: 0"* ]]
+  [ "$(stat -c %i "$copied_result")" = "$result_inode" ]
+  [ "$(stat -c %i "$copied_dependency")" = "$dependency_inode" ]
+  [ "$(find "$checkout/portable/nix/store" -type f -exec sha256sum {} \; | LC_ALL=C sort | sha256sum)" = "$portable_before" ]
   [ -f "$checkout/portable/entrypoint/sentinel" ]
   [ -f "$checkout/outside-sentinel" ]
   [ "$(donor_digest)" = "$donor_before" ]
@@ -243,6 +249,7 @@ assert_default_certificates() {
   chmod u+w "$checkout/portable/nix"
   touch "$checkout/portable/nix/keep-after-invalid"
   result_target="$(readlink "$checkout/portable/result")"
+  rm -f "$checkout/config/shelffiles.conf"
 
   run env -u SHELFFILES_PORTABLE_PREFIX PATH="$fake_bin:$PATH" \
     "$checkout/utils/create_portable.sh"
