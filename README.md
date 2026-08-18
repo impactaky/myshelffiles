@@ -48,8 +48,10 @@ variable:
 
 The saved assignment is marked as managed by `utils/create_portable.sh`.
 Unrelated settings, comments, and manually maintained prefix assignments are
-preserved. Repeated successful exports update the one managed assignment. A
-prefix read from the configuration file is not written back unnecessarily.
+preserved. Repeated successful exports remove old managed copies and append one
+canonical managed assignment after the preserved content, so the saved value is
+effective on the next config-only run. A prefix read from the configuration file
+is not written back unnecessarily.
 
 `SHELFFILES_PORTABLE_PREFIX` has no default and must match exactly
 `/tmp/[A-Za-z0-9]{5}`. The complete path is therefore 10 ASCII bytes, the same
@@ -118,7 +120,11 @@ complete rebuild deliberately even when the prefix is unchanged:
 The exporter accepts no other arguments. Validation, copy, relocation, and
 residual-reference failures do not save an environment prefix. Prefix-change and
 forced rebuilds are prepared away from the active generated tree, so a failure
-during preparation does not replace the previous successful export.
+during preparation does not replace the previous successful export. During the
+final tree/result switch, the prior successful tree remains in a temporary
+backup: an ordinary failure restores it, while a later invocation either recovers
+that proven successful backup from interrupted state or removes it after finding
+an already successful active export.
 
 At portable startup, the prefix recorded during export must be a symlink to this
 checkout's absolute `portable/nix/store` path. The entrypoint reads and validates

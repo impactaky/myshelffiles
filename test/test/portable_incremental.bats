@@ -360,3 +360,110 @@ EOF
   assert_counts 2 0 0
   [ "$(grep -Fc 'SHELFFILES_PORTABLE_PREFIX=' "$checkout/config/shelffiles.conf")" -eq 1 ]
 }
+
+@test "managed prefix is canonical after later manual assignments" {
+  require_writable_nix_store
+  create_fixture
+  mkdir -p "$checkout/config"
+  printf '# before\nSHELFFILES_PORTABLE_PREFIX=%s # managed by utils/create_portable.sh\nOTHER_SETTING=kept\nSHELFFILES_PORTABLE_PREFIX=%s\n# after\n' \
+    "$config_prefix" "$other_prefix" >"$checkout/config/shelffiles.conf"
+
+  run env PATH="$fake_bin:$PATH" SHELFFILES_PORTABLE_PREFIX="$runtime_prefix" \
+    "$checkout/utils/create_portable.sh"
+  echo "$output"
+  [ "$status" -eq 0 ]
+  [ "$(grep -Fc '# managed by utils/create_portable.sh' "$checkout/config/shelffiles.conf")" -eq 1 ]
+  grep -Fx "SHELFFILES_PORTABLE_PREFIX=$other_prefix" "$checkout/config/shelffiles.conf"
+  [ "$(tail -n 1 "$checkout/config/shelffiles.conf")" = \
+    "SHELFFILES_PORTABLE_PREFIX=$runtime_prefix # managed by utils/create_portable.sh" ]
+
+  config_before="$(sha256sum "$checkout/config/shelffiles.conf")"
+  run env -u SHELFFILES_PORTABLE_PREFIX PATH="$fake_bin:$PATH" \
+    "$checkout/utils/create_portable.sh"
+  echo "$output"
+  [ "$status" -eq 0 ]
+  assert_counts 2 0 0
+  [ "$(cat "$checkout/portable/nix/runtime-prefix")" = "$runtime_prefix" ]
+  [ "$(sha256sum "$checkout/config/shelffiles.conf")" = "$config_before" ]
+}
+
+@test "full-regeneration switch failure restores the previous successful export" {
+  require_writable_nix_store
+  create_fixture
+  run env PATH="$fake_bin:$PATH" SHELFFILES_PORTABLE_PREFIX="$runtime_prefix" \
+    "$checkout/utils/create_portable.sh"
+  [ "$status" -eq 0 ]
+  result_target="$(readlink "$checkout/portable/result")"
+  dependency_before="$(sha256sum "$checkout/portable/nix/store/${dependency_path##*/}/lib/value")"
+  config_before="$(sha256sum "$checkout/config/shelffiles.conf")"
+  real_mv="$(command -v mv)"
+  failure_marker="$test_root/mv-failed"
+  create_changed_result
+
+  cat >"$fake_bin/mv" <<'EOF'
+#!/bin/sh
+destination=
+for argument do
+  destination=$argument
+done
+if [ "$destination" = "$FAIL_MV_DESTINATION" ] && [ ! -e "$FAILURE_MARKER" ]; then
+  : >"$FAILURE_MARKER"
+  exit 97
+fi
+exec "$REAL_MV" "$@"
+EOF
+  chmod 0755 "$fake_bin/mv"
+
+  run env PATH="$fake_bin:$PATH" SHELFFILES_PORTABLE_PREFIX="$other_prefix" \
+    FAIL_MV_DESTINATION="$checkout/portable/result" FAILURE_MARKER="$failure_marker" \
+    REAL_MV="$real_mv" "$checkout/utils/create_portable.sh"
+  echo "$output"
+  [ "$status" -eq 97 ]
+  [ -e "$failure_marker" ]
+  [ "$(cat "$checkout/portable/nix/runtime-prefix")" = "$runtime_prefix" ]
+  [ "$(readlink "$checkout/portable/result")" = "$result_target" ]
+  [ "$(sha256sum "$checkout/portable/nix/store/${dependency_path##*/}/lib/value")" = "$dependency_before" ]
+  [ "$(sha256sum "$checkout/config/shelffiles.conf")" = "$config_before" ]
+  run "$checkout/portable/result/bin/bash"
+  [ "$status" -eq 0 ]
+  [ "$output" = 'portable fixture' ]
+  [ -z "$(find "$checkout/portable" -maxdepth 1 -name '.nix.shelffiles-portable-old.*' -print -quit)" ]
+}
+
+@test "startup restores the only successful old-tree backup and removes stale backups" {
+  require_writable_nix_store
+  create_fixture
+  run env PATH="$fake_bin:$PATH" SHELFFILES_PORTABLE_PREFIX="$runtime_prefix" \
+    "$checkout/utils/create_portable.sh"
+  [ "$status" -eq 0 ]
+  result_target="$(readlink "$checkout/portable/result")"
+  dependency_before="$(sha256sum "$checkout/portable/nix/store/${dependency_path##*/}/lib/value")"
+
+  interrupted_backup="$checkout/portable/.nix.shelffiles-portable-old.interrupted"
+  mv "$checkout/portable/nix" "$interrupted_backup"
+  mkdir -p "$checkout/portable/nix/store"
+  printf '%s\n' "$other_prefix" >"$checkout/portable/nix/runtime-prefix"
+  chmod -R a-w "$checkout/portable/nix"
+
+  run env -u SHELFFILES_PORTABLE_PREFIX PATH="$fake_bin:$PATH" \
+    "$checkout/utils/create_portable.sh"
+  echo "$output"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Recovered interrupted portable export"* ]]
+  assert_counts 2 0 0
+  [ "$(cat "$checkout/portable/nix/runtime-prefix")" = "$runtime_prefix" ]
+  [ "$(readlink "$checkout/portable/result")" = "$result_target" ]
+  [ "$(sha256sum "$checkout/portable/nix/store/${dependency_path##*/}/lib/value")" = "$dependency_before" ]
+  run "$checkout/portable/result/bin/bash"
+  [ "$status" -eq 0 ]
+  [ "$output" = 'portable fixture' ]
+  [ ! -e "$interrupted_backup" ]
+
+  stale_backup="$checkout/portable/.nix.shelffiles-portable-old.stale"
+  cp -a "$checkout/portable/nix" "$stale_backup"
+  run env -u SHELFFILES_PORTABLE_PREFIX PATH="$fake_bin:$PATH" \
+    "$checkout/utils/create_portable.sh"
+  [ "$status" -eq 0 ]
+  assert_counts 2 0 0
+  [ ! -e "$stale_backup" ]
+}

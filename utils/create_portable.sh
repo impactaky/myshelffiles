@@ -39,6 +39,10 @@ temporary_path=
 staged_nix=
 result_temporary=
 config_temporary=
+old_nix_backup=
+old_nix_was_successful=0
+previous_result_target=
+full_switch_committed=0
 store_permissions_changed=0
 
 cleanup_on_exit() {
@@ -58,6 +62,34 @@ cleanup_on_exit() {
   fi
   if [[ -n $config_temporary && ( -e $config_temporary || -L $config_temporary ) ]]; then
     rm -f -- "$config_temporary"
+  fi
+  if [[ -n $old_nix_backup && ( -e $old_nix_backup || -L $old_nix_backup ) ]]; then
+    if ((old_nix_was_successful && !full_switch_committed)); then
+      remove_generated_tree "$portable_nix"
+      if mv -- "$old_nix_backup" "$portable_nix"; then
+        old_nix_backup=
+        if [[ -n $previous_result_target ]] && {
+          [[ ! -L $portable_result ]] ||
+            [[ $(readlink -- "$portable_result") != "$previous_result_target" ]]
+        }; then
+          result_temporary="$portable_root/.result.shelffiles-portable-rollback.$$"
+          rm -f -- "$result_temporary"
+          if ln -s -- "$previous_result_target" "$result_temporary" &&
+            mv -Tf -- "$result_temporary" "$portable_result"; then
+            result_temporary=
+          else
+            printf 'Portable export rollback could not restore result metadata: %s\n' \
+              "$portable_result" >&2
+          fi
+        fi
+      else
+        printf 'Portable export rollback could not restore backup: %s\n' \
+          "$old_nix_backup" >&2
+      fi
+    else
+      remove_generated_tree "$old_nix_backup"
+      old_nix_backup=
+    fi
   fi
   if ((store_permissions_changed)) && [[ -d $portable_nix && ! -L $portable_nix ]]; then
     chmod a-w -- "$portable_store" "$portable_nix" 2>/dev/null || true
@@ -108,12 +140,14 @@ count_final_store_entries() {
   printf '%s\n' "$count"
 }
 
-read_completed_export_prefix() {
-  local metadata=$portable_nix/runtime-prefix
+read_completed_export_prefix_at() {
+  local nix_root=$1
+  local store=$nix_root/store
+  local metadata=$nix_root/runtime-prefix
   local recorded_prefix unexpected_line result_target result_name
 
-  [[ -d $portable_nix && ! -L $portable_nix ]] || return 1
-  [[ -d $portable_store && ! -L $portable_store ]] || return 1
+  [[ -d $nix_root && ! -L $nix_root ]] || return 1
+  [[ -d $store && ! -L $store ]] || return 1
   [[ -f $metadata && ! -L $metadata ]] || return 1
   if ! {
     IFS= read -r recorded_prefix &&
@@ -130,9 +164,48 @@ read_completed_export_prefix() {
   result_name=${result_target#nix/store/}
   [[ $result_name != */* ]] || return 1
   is_store_name "$result_name" || return 1
-  [[ -d $portable_store/$result_name && ! -L $portable_store/$result_name ]] || return 1
+  [[ -d $store/$result_name && ! -L $store/$result_name ]] || return 1
 
   printf '%s\n' "$recorded_prefix"
+}
+
+read_completed_export_prefix() {
+  read_completed_export_prefix_at "$portable_nix"
+}
+
+recover_interrupted_backups() {
+  local backup recoverable_backup='' active_completed=0
+
+  if read_completed_export_prefix >/dev/null 2>&1; then
+    active_completed=1
+  fi
+
+  while IFS= read -r -d '' backup; do
+    if ((active_completed)); then
+      remove_generated_tree "$backup"
+      continue
+    fi
+    if read_completed_export_prefix_at "$backup" >/dev/null 2>&1; then
+      [[ -z $recoverable_backup ]] || \
+        fail 'multiple interrupted portable backups are recoverable; refusing to choose one'
+      recoverable_backup=$backup
+    fi
+  done < <(find "$portable_root" -mindepth 1 -maxdepth 1 \
+    -name '.nix.shelffiles-portable-old.*' -print0)
+
+  if ((active_completed)); then
+    return
+  fi
+  if [[ -n $recoverable_backup ]]; then
+    remove_generated_tree "$portable_nix"
+    mv -- "$recoverable_backup" "$portable_nix"
+    printf 'Recovered interrupted portable export\n'
+  fi
+
+  while IFS= read -r -d '' backup; do
+    remove_generated_tree "$backup"
+  done < <(find "$portable_root" -mindepth 1 -maxdepth 1 \
+    -name '.nix.shelffiles-portable-old.*' -print0)
 }
 
 rewrite_and_verify_entry() {
@@ -225,7 +298,7 @@ switch_portable_result() {
 
 persist_environment_prefix() {
   local config_dir=${config_file%/*}
-  local line had_newline found_managed=0 wrote_any=0 last_had_newline=1
+  local line had_newline wrote_any=0 last_had_newline=1
   local config_mode=
 
   mkdir -p -- "$config_dir"
@@ -241,17 +314,10 @@ persist_environment_prefix() {
         had_newline=0
         [[ -n $line ]] || break
       fi
+
+      [[ $line == SHELFFILES_PORTABLE_PREFIX=*"$managed_config_suffix" ]] && continue
       wrote_any=1
       last_had_newline=$had_newline
-
-      if [[ $line == SHELFFILES_PORTABLE_PREFIX=*"$managed_config_suffix" ]]; then
-        if ((found_managed)); then
-          continue
-        fi
-        line="SHELFFILES_PORTABLE_PREFIX=$runtime_prefix$managed_config_suffix"
-        found_managed=1
-      fi
-
       printf '%s' "$line" >>"$config_temporary"
       ((had_newline)) && printf '\n' >>"$config_temporary"
     done <"$config_file"
@@ -259,13 +325,11 @@ persist_environment_prefix() {
     fail "configuration path is not a regular file: $config_file"
   fi
 
-  if ((!found_managed)); then
-    if ((wrote_any && !last_had_newline)); then
-      printf '\n' >>"$config_temporary"
-    fi
-    printf 'SHELFFILES_PORTABLE_PREFIX=%s%s\n' \
-      "$runtime_prefix" "$managed_config_suffix" >>"$config_temporary"
+  if ((wrote_any && !last_had_newline)); then
+    printf '\n' >>"$config_temporary"
   fi
+  printf 'SHELFFILES_PORTABLE_PREFIX=%s%s\n' \
+    "$runtime_prefix" "$managed_config_suffix" >>"$config_temporary"
 
   [[ -z $config_mode ]] || chmod "$config_mode" -- "$config_temporary"
   mv -- "$config_temporary" "$config_file"
@@ -346,6 +410,7 @@ while IFS= read -r -d '' temporary_path; do
 done < <(find "$portable_root" -mindepth 1 -maxdepth 1 \
   \( -name '.nix.shelffiles-portable-tmp.*' \
   -o -name '.result.shelffiles-portable-tmp.*' \) -print0)
+recover_interrupted_backups
 
 completed_prefix=
 if completed_prefix="$(read_completed_export_prefix 2>/dev/null)"; then
@@ -418,15 +483,24 @@ else
   printf '%s\n' "$runtime_prefix" >"$staged_nix/runtime-prefix"
   chmod a-w -- "$staged_store" "$staged_nix"
 
-  old_nix="$portable_root/.nix.shelffiles-portable-old.$$"
-  remove_generated_tree "$old_nix"
+  old_nix_backup="$portable_root/.nix.shelffiles-portable-old.$$"
+  old_nix_was_successful=0
+  previous_result_target=
+  full_switch_committed=0
+  remove_generated_tree "$old_nix_backup"
   if [[ -e $portable_nix || -L $portable_nix ]]; then
-    mv -- "$portable_nix" "$old_nix"
+    if ((completed_export)) && [[ -L $portable_result ]]; then
+      previous_result_target="$(readlink -- "$portable_result")"
+      old_nix_was_successful=1
+    fi
+    mv -- "$portable_nix" "$old_nix_backup"
   fi
   mv -- "$staged_nix" "$portable_nix"
   staged_nix=
   switch_portable_result
-  remove_generated_tree "$old_nix"
+  full_switch_committed=1
+  remove_generated_tree "$old_nix_backup"
+  old_nix_backup=
 fi
 
 if ((portable_prefix_from_environment)); then
