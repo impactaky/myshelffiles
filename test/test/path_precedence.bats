@@ -19,5 +19,5 @@ setup() {
   echo "Output: $output"
 
   [ "$status" -eq 0 ]
-  [[ "$output" == *":$expected_shims:$repo_root/result/bin:$repo_root/result_docker/bin:"* ]]
+  [[ "$output" == *"PATH=$expected_shims:$repo_root/result/bin:$repo_root/result_docker/bin:"* ]]
 }
