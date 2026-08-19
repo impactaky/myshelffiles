@@ -52,6 +52,10 @@ preserved. Repeated successful exports remove old managed copies and append one
 canonical managed assignment after the preserved content, so the saved value is
 effective on the next config-only run. A prefix read from the configuration file
 is not written back unnecessarily.
+If saving the configuration fails after the artifact commits, the command
+prints a warning but leaves the successful artifact active and exits
+successfully. Fix the configuration path and rerun with the intended process
+environment prefix to retry persistence.
 
 `SHELFFILES_PORTABLE_PREFIX` has no default and must match exactly
 `/tmp/[A-Za-z0-9]{5}`. The complete path is therefore 10 ASCII bytes, the same
@@ -100,14 +104,22 @@ recursive scan, copy, or rewrite. Each missing entry is copied under a temporary
 name, rewritten and residual-checked there, made read-only, and only then renamed
 to its final store basename. Existing exports made by earlier versions are
 eligible for this reuse when their recorded prefix and relative result structure
-show that export finalization completed.
+show that export finalization completed. Reuse assumes generated entries under
+`portable/nix` have not been modified since export; they are made read-only but
+remain owned by the user. After manually changing or repairing generated
+content, run with `--force`. Incremental mode deliberately does not recursively
+verify reused entries.
 
 After every required entry is ready, the exporter switches `portable/result` to
-the current result and removes final-name entries no longer in the closure. A
-failed incremental update leaves the previously selected result usable and does
-not prune stale entries. Temporary entries from a failed or interrupted update
-are never reused and are removed by a later run. The summary reports reused,
-copied, and removed store path counts.
+the current result; this switch is the incremental commit point. Failures before
+that point, including an inability to enumerate the complete store, leave the
+previously selected result usable and do not prune stale entries. After the
+switch, final-name entries no longer in the closure are removed on a best-effort
+basis and generated-directory write permissions are restored. A post-commit
+cleanup or permission failure emits a warning and leaves the new result selected;
+stale generated paths are retried by a later run. Temporary entries from a failed
+or interrupted update are never reused and are removed by a later run. The
+summary reports reused, copied, and removed store path counts.
 
 A changed prefix or an incomplete prior export rebuilds the complete closure
 because every relocated literal must agree. Use `--force` to request the same
@@ -124,8 +136,10 @@ during preparation does not replace the previous successful export. During the
 final tree/result switch, the prior successful tree remains in a temporary
 backup: an ordinary failure restores it, while a later invocation either recovers
 that proven successful backup from interrupted state or removes it after finding
-an already successful active export.
-
+an already successful active export. Failure to remove the old backup after the
+new tree and result have committed is reported as a warning and does not turn the
+completed export into a failure. Backup, temporary-path, and store enumerations
+are captured and checked before their results are used for recovery or mutation.
 At portable startup, the prefix recorded during export must be a symlink to this
 checkout's absolute `portable/nix/store` path. The entrypoint reads and validates
 the generated metadata; it does not select a new prefix from the current process

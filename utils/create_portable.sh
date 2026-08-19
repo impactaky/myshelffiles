@@ -35,6 +35,11 @@ readonly portable_result="$portable_root/result"
 readonly config_file="$checkout_root/config/shelffiles.conf"
 
 closure_inventory=
+regular_inventory=
+symlink_inventory=
+backup_inventory=
+temporary_inventory=
+store_inventory=
 temporary_path=
 staged_nix=
 result_temporary=
@@ -48,25 +53,12 @@ store_permissions_changed=0
 cleanup_on_exit() {
   local status=$?
   trap - EXIT
+  set +e
 
-  if [[ -n $temporary_path && ( -e $temporary_path || -L $temporary_path ) ]]; then
-    chmod -R u+w -- "$temporary_path" 2>/dev/null || true
-    rm -rf -- "$temporary_path"
-  fi
-  if [[ -n $staged_nix && ( -e $staged_nix || -L $staged_nix ) ]]; then
-    chmod -R u+w -- "$staged_nix" 2>/dev/null || true
-    rm -rf -- "$staged_nix"
-  fi
-  if [[ -n $result_temporary && ( -e $result_temporary || -L $result_temporary ) ]]; then
-    rm -rf -- "$result_temporary"
-  fi
-  if [[ -n $config_temporary && ( -e $config_temporary || -L $config_temporary ) ]]; then
-    rm -f -- "$config_temporary"
-  fi
   if [[ -n $old_nix_backup && ( -e $old_nix_backup || -L $old_nix_backup ) ]]; then
     if ((old_nix_was_successful && !full_switch_committed)); then
-      remove_generated_tree "$portable_nix"
-      if mv -- "$old_nix_backup" "$portable_nix"; then
+      if remove_generated_tree "$portable_nix" &&
+        mv -- "$old_nix_backup" "$portable_nix"; then
         old_nix_backup=
         if [[ -n $previous_result_target ]] && {
           [[ ! -L $portable_result ]] ||
@@ -91,10 +83,29 @@ cleanup_on_exit() {
       old_nix_backup=
     fi
   fi
-  if ((store_permissions_changed)) && [[ -d $portable_nix && ! -L $portable_nix ]]; then
-    chmod a-w -- "$portable_store" "$portable_nix" 2>/dev/null || true
+  if [[ -n $temporary_path && ( -e $temporary_path || -L $temporary_path ) ]]; then
+    chmod -R u+w -- "$temporary_path" 2>/dev/null
+    rm -rf -- "$temporary_path"
   fi
-  [[ -z $closure_inventory ]] || rm -f -- "$closure_inventory"
+  if [[ -n $staged_nix && ( -e $staged_nix || -L $staged_nix ) ]]; then
+    chmod -R u+w -- "$staged_nix" 2>/dev/null
+    rm -rf -- "$staged_nix"
+  fi
+  if [[ -n $result_temporary && ( -e $result_temporary || -L $result_temporary ) ]]; then
+    rm -rf -- "$result_temporary"
+  fi
+  if [[ -n $config_temporary && ( -e $config_temporary || -L $config_temporary ) ]]; then
+    rm -f -- "$config_temporary"
+  fi
+  if ((store_permissions_changed)) && [[ -d $portable_nix && ! -L $portable_nix ]]; then
+    chmod a-w -- "$portable_store" "$portable_nix" 2>/dev/null
+  fi
+  [[ -z $closure_inventory ]] || rm -f -- "$closure_inventory" 2>/dev/null
+  [[ -z $regular_inventory ]] || rm -f -- "$regular_inventory" 2>/dev/null
+  [[ -z $symlink_inventory ]] || rm -f -- "$symlink_inventory" 2>/dev/null
+  [[ -z $backup_inventory ]] || rm -f -- "$backup_inventory" 2>/dev/null
+  [[ -z $temporary_inventory ]] || rm -f -- "$temporary_inventory" 2>/dev/null
+  [[ -z $store_inventory ]] || rm -f -- "$store_inventory" 2>/dev/null
 
   exit "$status"
 }
@@ -125,18 +136,24 @@ remove_generated_tree() {
 
 count_final_store_entries() {
   local store=$1
-  local entry entry_name count=0
+  local entry entry_name count=0 inventory
 
   if [[ ! -d $store || -L $store ]]; then
     printf '0\n'
     return
+  fi
+  inventory="$(mktemp /tmp/shelffiles-portable-count.XXXXXX)"
+  if ! find "$store" -mindepth 1 -maxdepth 1 -print0 >"$inventory"; then
+    rm -f -- "$inventory"
+    return 1
   fi
   while IFS= read -r -d '' entry; do
     entry_name=${entry##*/}
     if is_store_name "$entry_name"; then
       ((count += 1))
     fi
-  done < <(find "$store" -mindepth 1 -maxdepth 1 -print0)
+  done <"$inventory"
+  rm -f -- "$inventory"
   printf '%s\n' "$count"
 }
 
@@ -176,6 +193,12 @@ read_completed_export_prefix() {
 recover_interrupted_backups() {
   local backup recoverable_backup='' active_completed=0
 
+  backup_inventory="$(mktemp /tmp/shelffiles-portable-backups.XXXXXX)"
+  if ! find "$portable_root" -mindepth 1 -maxdepth 1 \
+    -name '.nix.shelffiles-portable-old.*' -print0 >"$backup_inventory"; then
+    fail 'could not enumerate interrupted portable backups'
+  fi
+
   if read_completed_export_prefix >/dev/null 2>&1; then
     active_completed=1
   fi
@@ -190,10 +213,11 @@ recover_interrupted_backups() {
         fail 'multiple interrupted portable backups are recoverable; refusing to choose one'
       recoverable_backup=$backup
     fi
-  done < <(find "$portable_root" -mindepth 1 -maxdepth 1 \
-    -name '.nix.shelffiles-portable-old.*' -print0)
+  done <"$backup_inventory"
 
   if ((active_completed)); then
+    rm -f -- "$backup_inventory"
+    backup_inventory=
     return
   fi
   if [[ -n $recoverable_backup ]]; then
@@ -204,22 +228,38 @@ recover_interrupted_backups() {
 
   while IFS= read -r -d '' backup; do
     remove_generated_tree "$backup"
-  done < <(find "$portable_root" -mindepth 1 -maxdepth 1 \
-    -name '.nix.shelffiles-portable-old.*' -print0)
+  done <"$backup_inventory"
+  rm -f -- "$backup_inventory"
+  backup_inventory=
 }
 
 rewrite_and_verify_entry() {
   local entry=$1
-  local file_path reference_count file_mode parent_dir parent_mode
+  local file_path reference_count file_mode parent_dir parent_mode grep_status
   local link_path link_target replacement
   local residual_regular=0 residual_symlinks=0
 
+  regular_inventory="$(mktemp /tmp/shelffiles-portable-files.XXXXXX)"
+  symlink_inventory="$(mktemp /tmp/shelffiles-portable-links.XXXXXX)"
+  if ! find "$entry" -type f -print0 >"$regular_inventory"; then
+    fail "could not enumerate regular files under copied entry: $entry"
+  fi
+  if ! find "$entry" -type l -print0 >"$symlink_inventory"; then
+    fail "could not enumerate symlinks under copied entry: $entry"
+  fi
+
   while IFS= read -r -d '' file_path; do
-    if ! LC_ALL=C grep -aFq -- "$source_prefix" "$file_path"; then
-      continue
+    if LC_ALL=C grep -aF -- "$source_prefix" "$file_path" >/dev/null; then
+      :
+    else
+      grep_status=$?
+      ((grep_status == 1)) && continue
+      fail "could not inspect regular file for source references: $file_path"
     fi
 
-    reference_count="$(LC_ALL=C grep -aobF -- "$source_prefix" "$file_path" | wc -l || true)"
+    if ! reference_count="$(LC_ALL=C grep -aobF -- "$source_prefix" "$file_path" | wc -l)"; then
+      fail "could not count source references in regular file: $file_path"
+    fi
     file_mode="$(stat -c %a -- "$file_path")"
     parent_dir="$(dirname -- "$file_path")"
     parent_mode="$(stat -c %a -- "$parent_dir")"
@@ -229,7 +269,7 @@ rewrite_and_verify_entry() {
     chmod "$parent_mode" -- "$parent_dir"
     ((regular_files_rewritten += 1))
     ((regular_references_rewritten += reference_count))
-  done < <(find "$entry" -type f -print0)
+  done <"$regular_inventory"
 
   while IFS= read -r -d '' link_path; do
     link_target="$(readlink -- "$link_path")"
@@ -241,14 +281,18 @@ rewrite_and_verify_entry() {
     ln -sfn -- "$replacement" "$link_path"
     chmod "$parent_mode" -- "$parent_dir"
     ((symlinks_rewritten += 1))
-  done < <(find "$entry" -type l -print0)
+  done <"$symlink_inventory"
 
   while IFS= read -r -d '' file_path; do
-    if LC_ALL=C grep -aFq -- "$source_prefix" "$file_path"; then
+    if LC_ALL=C grep -aF -- "$source_prefix" "$file_path" >/dev/null; then
       printf 'Residual regular-file reference: %s\n' "$file_path" >&2
       ((residual_regular += 1))
+    else
+      grep_status=$?
+      ((grep_status == 1)) || \
+        fail "could not verify regular file after relocation: $file_path"
     fi
-  done < <(find "$entry" -type f -print0)
+  done <"$regular_inventory"
 
   while IFS= read -r -d '' link_path; do
     link_target="$(readlink -- "$link_path")"
@@ -256,7 +300,11 @@ rewrite_and_verify_entry() {
       printf 'Residual symlink reference: %s -> %s\n' "$link_path" "$link_target" >&2
       ((residual_symlinks += 1))
     fi
-  done < <(find "$entry" -type l -print0)
+  done <"$symlink_inventory"
+
+  rm -f -- "$regular_inventory" "$symlink_inventory"
+  regular_inventory=
+  symlink_inventory=
 
   if ((residual_regular != 0 || residual_symlinks != 0)); then
     fail "residual $source_prefix references remain (files=$residual_regular, symlinks=$residual_symlinks)"
@@ -332,8 +380,13 @@ persist_environment_prefix() {
     "$runtime_prefix" "$managed_config_suffix" >>"$config_temporary"
 
   [[ -z $config_mode ]] || chmod "$config_mode" -- "$config_temporary"
-  mv -- "$config_temporary" "$config_file"
-  config_temporary=
+
+  if mv -- "$config_temporary" "$config_file"; then
+    config_temporary=
+  else
+    printf 'Portable export warning: export completed but prefix configuration could not be saved: %s\n' \
+      "$config_file" >&2
+  fi
 }
 
 portable_prefix_from_environment=0
@@ -391,6 +444,7 @@ LC_ALL=C "$nix_store" --query --requisites "$resolved_result" \
   | LC_ALL=C sort -u >"$closure_inventory" || fail 'could not query result closure'
 [[ -s $closure_inventory ]] || fail 'nix-store returned an empty closure'
 
+declare -A required_store_names=()
 result_in_closure=0
 while IFS= read -r store_path; do
   [[ -n $store_path ]] || fail 'closure contains an empty path'
@@ -399,17 +453,25 @@ while IFS= read -r store_path; do
   store_name=${store_path##*/}
   is_store_name "$store_name" || fail "closure contains a non-Nix store path: $store_path"
   [[ -e $store_path || -L $store_path ]] || fail "closure path is missing: $store_path"
+  required_store_names["$store_name"]=1
   [[ $store_path == "$resolved_result" ]] && result_in_closure=1
 done <"$closure_inventory"
 [[ $result_in_closure == 1 ]] || fail 'queried closure does not contain the ordinary result'
 
 mkdir -p -- "$portable_root"
+temporary_inventory="$(mktemp /tmp/shelffiles-portable-temporary.XXXXXX)"
+if ! find "$portable_root" -mindepth 1 -maxdepth 1 \
+  \( -name '.nix.shelffiles-portable-tmp.*' \
+  -o -name '.result.shelffiles-portable-tmp.*' \) \
+  -print0 >"$temporary_inventory"; then
+  fail 'could not enumerate interrupted portable temporary paths'
+fi
 while IFS= read -r -d '' temporary_path; do
   remove_generated_tree "$temporary_path"
   temporary_path=
-done < <(find "$portable_root" -mindepth 1 -maxdepth 1 \
-  \( -name '.nix.shelffiles-portable-tmp.*' \
-  -o -name '.result.shelffiles-portable-tmp.*' \) -print0)
+done <"$temporary_inventory"
+rm -f -- "$temporary_inventory"
+temporary_inventory=
 recover_interrupted_backups
 
 completed_prefix=
@@ -432,15 +494,22 @@ regular_references_rewritten=0
 symlinks_rewritten=0
 
 if ((incremental_export)); then
-  chmod u+w -- "$portable_nix" "$portable_store"
   store_permissions_changed=1
+  chmod u+w -- "$portable_nix" "$portable_store"
+  chmod a-w -- "$portable_nix/runtime-prefix"
 
+  temporary_inventory="$(mktemp /tmp/shelffiles-portable-temporary.XXXXXX)"
+  if ! find "$portable_store" -mindepth 1 -maxdepth 1 \
+    -name "$temporary_entry_prefix*" -print0 >"$temporary_inventory"; then
+    fail 'could not enumerate temporary portable store paths'
+  fi
   while IFS= read -r -d '' temporary_path; do
     chmod -R u+w -- "$temporary_path" 2>/dev/null || true
     rm -rf -- "$temporary_path"
     temporary_path=
-  done < <(find "$portable_store" -mindepth 1 -maxdepth 1 \
-    -name "$temporary_entry_prefix*" -print0)
+  done <"$temporary_inventory"
+  rm -f -- "$temporary_inventory"
+  temporary_inventory=
 
   while IFS= read -r store_path; do
     store_name=${store_path##*/}
@@ -454,21 +523,44 @@ if ((incremental_export)); then
 
   [[ -d $portable_store/$result_name && ! -L $portable_store/$result_name ]] || \
     fail "transformed result is missing: $portable_store/$result_name"
+  store_inventory="$(mktemp /tmp/shelffiles-portable-store.XXXXXX)"
+  if ! find "$portable_store" -mindepth 1 -maxdepth 1 \
+    -print0 >"$store_inventory"; then
+    fail 'could not enumerate portable store before result switch'
+  fi
   switch_portable_result
 
   while IFS= read -r -d '' final_path; do
     store_name=${final_path##*/}
     is_store_name "$store_name" || continue
-    if LC_ALL=C grep -Fxq -- "$source_prefix/$store_name" "$closure_inventory"; then
+    if [[ -n ${required_store_names[$store_name]+present} ]]; then
       continue
     fi
-    chmod -R u+w -- "$final_path" 2>/dev/null || true
-    rm -rf -- "$final_path"
-    ((removed_count += 1))
-  done < <(find "$portable_store" -mindepth 1 -maxdepth 1 -print0)
+    chmod -R u+w -- "$final_path" 2>/dev/null || \
+      printf 'Portable export warning: could not make stale store path writable: %s\n' \
+        "$final_path" >&2
+    if rm -rf -- "$final_path"; then
+      ((removed_count += 1))
+    else
+      printf 'Portable export warning: could not remove stale store path: %s\n' \
+        "$final_path" >&2
+      chmod -R a-w -- "$final_path" 2>/dev/null || \
+        printf 'Portable export warning: could not restore stale store path permissions: %s\n' \
+          "$final_path" >&2
+    fi
+  done <"$store_inventory"
+  if rm -f -- "$store_inventory"; then
+    store_inventory=
+  else
+    printf 'Portable export warning: could not remove verified store inventory: %s\n' \
+      "$store_inventory" >&2
+  fi
 
-  chmod a-w -- "$portable_store" "$portable_nix"
-  store_permissions_changed=0
+  if chmod a-w -- "$portable_store" "$portable_nix"; then
+    store_permissions_changed=0
+  else
+    printf 'Portable export warning: new result is active but generated directory permissions could not be restored\n' >&2
+  fi
 else
   removed_count="$(count_final_store_entries "$portable_store")"
   staged_nix="$(mktemp -d "$portable_root/.nix.shelffiles-portable-tmp.XXXXXX")"
@@ -481,7 +573,7 @@ else
   [[ -d $staged_store/$result_name && ! -L $staged_store/$result_name ]] || \
     fail "transformed result is missing: $staged_store/$result_name"
   printf '%s\n' "$runtime_prefix" >"$staged_nix/runtime-prefix"
-  chmod a-w -- "$staged_store" "$staged_nix"
+  chmod a-w -- "$staged_nix/runtime-prefix" "$staged_store" "$staged_nix"
 
   old_nix_backup="$portable_root/.nix.shelffiles-portable-old.$$"
   old_nix_was_successful=0
@@ -499,8 +591,13 @@ else
   staged_nix=
   switch_portable_result
   full_switch_committed=1
-  remove_generated_tree "$old_nix_backup"
-  old_nix_backup=
+  if remove_generated_tree "$old_nix_backup"; then
+    old_nix_backup=
+  else
+    printf 'Portable export warning: new result is active but old generated backup could not be removed: %s\n' \
+      "$old_nix_backup" >&2
+    chmod -R a-w -- "$old_nix_backup" 2>/dev/null || true
+  fi
 fi
 
 if ((portable_prefix_from_environment)); then
