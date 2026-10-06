@@ -4,6 +4,8 @@ set -eu
 
 # Source environment and config
 SCRIPT_DIR="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)"
+SHELFFILES="$(CDPATH='' cd -- "$SCRIPT_DIR/.." && pwd)"
+export SHELFFILES
 # shellcheck disable=SC1091
 . "$SCRIPT_DIR/env.sh"
 

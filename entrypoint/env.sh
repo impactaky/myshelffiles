@@ -16,20 +16,24 @@ if [ -n "${SHELFFILES_ENV_FILE:-}" ]; then
     return 0
 fi
 
-SCRIPT_DIR="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)"
-SHELFFILES="$(CDPATH='' cd -- "$SCRIPT_DIR/.." && pwd)"
-export SHELFFILES="$SHELFFILES"
-
-# Load shelffiles configuration
-if [ -f "$SHELFFILES/config/shelffiles.conf" ]; then
-    # shellcheck disable=SC1091
-    . "$SHELFFILES/config/shelffiles.conf"
+# A caller sourcing this file can provide the root explicitly. Entrypoint
+# wrappers set it from their own location before loading this file.
+if [ -z "${SHELFFILES:-}" ]; then
+  SCRIPT_DIR="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)"
+  SHELFFILES="$(CDPATH='' cd -- "$SCRIPT_DIR/.." && pwd)"
 fi
 
 # Check if SHELFFILES variable is set
 if [ -z "$SHELFFILES" ]; then
   echo "Error: SHELFFILES variable is not set. Please define it before sourcing this script."
   return 1 2>/dev/null
+fi
+export SHELFFILES
+
+# Load shelffiles configuration
+if [ -f "$SHELFFILES/config/shelffiles.conf" ]; then
+    # shellcheck disable=SC1091
+    . "$SHELFFILES/config/shelffiles.conf"
 fi
 
 # Create a unique ID based on the path, user ID and group ID to avoid conflicts
