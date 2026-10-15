@@ -10,7 +10,7 @@ conflictstyle = diff3
 
 [user]
 email = impactaky@users.noreply.github.com
-name = impactaly
+name = impactaky
 
 [filter "lfs"]
 clean = git-lfs clean -- %f
@@ -24,9 +24,10 @@ clean = sed "/shelffiles/d"
 
 [core]
 hooksPath = /home/impactaky/shelffiles/config/git/.githooks
+	pager = hunk pager
 [credential "https://github.com"]
 	helper = 
-	helper = !/home/impactaky/shelffiles/result/bin/gh auth git-credential
+	helper = !/home/impactaky/shelffiles/result/bin/.gh-wrapped auth git-credential
 [credential "https://gist.github.com"]
 	helper = 
-	helper = !/home/impactaky/shelffiles/result/bin/gh auth git-credential
+	helper = !/home/impactaky/shelffiles/result/bin/.gh-wrapped auth git-credential
