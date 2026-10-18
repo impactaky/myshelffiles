@@ -62,7 +62,11 @@ The pane is retained for diagnosis on failure. A missing child session report is
 allowed if the remaining readiness checks pass; the parent can wait for its ID.
 
 Success stdout is exactly the child pane ID and a newline. Errors go to stderr
-with nonzero status. HERDR_BIN_PATH can select the Herdr executable (as upstream).
+with nonzero status. HERDR_BIN_PATH selects Herdr only when it resolves to an
+executable file; a missing/deleted/non-executable override falls back to `herdr`
+on PATH. If neither is executable, the script fails before any Herdr operation.
+Executable selection leaves inherited socket/session variables and source
+guards intact; it does not select another server or session.
 
 Run host-free checks from the repository root:
 

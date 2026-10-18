@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import shutil
 import tempfile
 import tomllib
 import unittest
@@ -92,6 +93,35 @@ class Plugins(unittest.TestCase):
         self.assertIsNone(start['thread'])
         self.assertFalse((self.base / 'SHOULD_NOT_EXIST').exists())
         self.assertFalse(any(c['args'][:2] == ['pane', 'current'] for c in calls))
+
+    def test_stale_binary_override_falls_back_to_path(self):
+        for override in ('missing', 'non-executable'):
+            with self.subTest(override=override):
+                stale = self.base / override
+                if override == 'non-executable':
+                    stale.write_text('must not execute')
+                self.env['HERDR_BIN_PATH'] = str(stale)
+                self.env['HERDR_SOCKET_PATH'] = '/synthetic/socket'
+                self.env['HERDR_SESSION'] = 'synthetic-session'
+                self.log.unlink(missing_ok=True)
+                self.run_fork('--split', '--no-focus', '--expected-session', UUID,
+                              '--expected-workspace', 'caller-workspace', 'source')
+                self.assertEqual(self.calls()[0]['args'], ['agent', 'get', 'source'])
+                self.assertTrue(all(c['socket'] == '/synthetic/socket' and
+                                    c['session'] == 'synthetic-session' for c in self.calls()))
+                self.log.unlink()
+                self.run_fork('--expected-session', 'wrong', 'source', ok=False)
+                self.assertEqual([c['args'][:2] for c in self.calls()], [['agent', 'get']])
+
+    def test_no_binary_fails_before_any_tool(self):
+        self.env['HERDR_BIN_PATH'] = str(self.base / 'deleted-herdr')
+        (self.bin / 'herdr').unlink()
+        (self.bin / 'bash').symlink_to(shutil.which('bash'))
+        (self.bin / 'jq').symlink_to(ROOT / 'tests/fake_host.py')
+        self.env['PATH'] = str(self.bin)
+        result = self.run_fork('source', ok=False)
+        self.assertIn('no executable Herdr found', result.stderr)
+        self.assertEqual(self.calls(), [])
 
     def test_tab_and_manual_focus_context(self):
         self.env['HERDR_PLUGIN_CONTEXT_JSON'] = '{"focused_pane_id":"source"}'

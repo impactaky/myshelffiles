@@ -10,6 +10,8 @@ name = Path(sys.argv[0]).name
 with open(os.environ['TEST_LOG'], 'a') as log:
     log.write(json.dumps({'exe': name, 'args': args, 'cwd': os.getcwd(),
                           'thread': os.environ.get('CODEX_THREAD_ID'),
+                          'socket': os.environ.get('HERDR_SOCKET_PATH'),
+                          'session': os.environ.get('HERDR_SESSION'),
                           'codex_home': os.environ.get('CODEX_HOME'),
                           'claude_config': os.environ.get('CLAUDE_CONFIG_DIR')}) + '\n')
 if name != 'herdr':

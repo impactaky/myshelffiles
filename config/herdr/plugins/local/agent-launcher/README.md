@@ -14,7 +14,7 @@ opening starts the agent; it never sends a prompt or resumes a conversation.
 The parent skill waits for input readiness and sends the literal prompt later.
 
 The manifest minimum is server 0.9.1. The Herdr API surface is plugin pane
-opening with entrypoint, split placement, workspace, target pane, cwd, env and
+opening with entrypoint, split placement, target pane, cwd, env and
 no-focus options, plus HERDR_PLUGIN_ROOT expansion in a fixed manifest command.
 CLI 0.9.3's public help/bundled schema contains these options. Native model,
 effort, provider and `--no-daemon` settings are agent arguments, not new server
@@ -26,13 +26,18 @@ After the parent has reviewed and linked the plugin, the hnew interface is:
 
 ```sh
 herdr plugin pane open --plugin agent-launcher --entrypoint agent-codex \
-  --placement split --workspace "$caller_workspace" --target-pane "$caller_pane" \
+  --placement split --target-pane "$caller_pane" \
   --cwd "$caller_cwd" --no-focus \
   --env "HERDR_AGENT_LAUNCHER_CWD=$caller_cwd" \
   --env "HERDR_AGENT_LAUNCHER_MODEL=$model" \
   --env "HERDR_AGENT_LAUNCHER_EFFORT=$effort" \
   --env "HERDR_AGENT_LAUNCHER_PROVIDER=$provider"
 ```
+
+For split placement, workspace derives from the explicit target pane. Do not
+also pass `--workspace`: the server rejects that combination (also for zoomed
+placement). After startup, the caller must verify the child's reported workspace
+matches the caller's expected workspace, along with cwd, kind and readiness.
 
 For Claude, use `agent-claude` and omit provider. Cwd is required, absolute and
 must exist. Optional empty settings retain native defaults. Model is a literal

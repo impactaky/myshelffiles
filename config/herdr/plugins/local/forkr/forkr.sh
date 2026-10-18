@@ -2,7 +2,6 @@
 # Derived from t4t5/herdr-forkr 1c1f6130589bf65456b6cdf398abfb5ddc1becad.
 # MIT; see LICENSE. Fork without changing the source pane.
 set -euo pipefail
-herdr=${HERDR_BIN_PATH:-herdr}
 fail() { printf 'forkr: %s\n' "$*" >&2; exit 1; }
 dest=tab direction=right focus=--focus target=''
 model='' effort='' provider='' expected_session='' expected_kind='' expected_workspace='' expected_cwd=''
@@ -31,6 +30,12 @@ while (($#)); do
   esac
   shift
 done
+# Upgraded CLIs can leave a deleted binary path in the parent environment.
+herdr=$(command -v -- "${HERDR_BIN_PATH:-herdr}" 2>/dev/null) || herdr=''
+if [[ ! -f $herdr || ! -x $herdr ]]; then
+  herdr=$(command -v herdr 2>/dev/null) || fail 'no executable Herdr found in HERDR_BIN_PATH or PATH'
+fi
+[[ -f $herdr && -x $herdr ]] || fail 'no executable Herdr found in HERDR_BIN_PATH or PATH'
 command -v jq >/dev/null || fail 'jq is required'
 # Manual actions use invocation focus, never a stale workspace/cwd environment.
 if [[ -z $target && -n ${HERDR_PLUGIN_CONTEXT_JSON:-} ]]; then
