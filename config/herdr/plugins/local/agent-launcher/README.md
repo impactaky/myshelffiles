@@ -7,10 +7,20 @@ pane entrypoints: `agent-codex` and `agent-claude`. The rejected
 scripts or manifest is included. No upstream license grant is asserted for this
 original code; it follows the enclosing repository's policy.
 
-Dependencies: Bash, Herdr 0.9.3 and the chosen native agent CLI. There is no
-picker, service, startup hook, installer or background process. Explicit pane
+Dependencies: Bash, Herdr CLI 0.9.3 with a server 0.9.1 compatibility target,
+and the chosen native agent CLI. There is no picker, service, startup hook,
+installer or background process. Explicit pane
 opening starts the agent; it never sends a prompt or resumes a conversation.
 The parent skill waits for input readiness and sends the literal prompt later.
+
+The manifest minimum is server 0.9.1. The Herdr API surface is plugin pane
+opening with entrypoint, split placement, workspace, target pane, cwd, env and
+no-focus options, plus HERDR_PLUGIN_ROOT expansion in a fixed manifest command.
+CLI 0.9.3's public help/bundled schema contains these options. Native model,
+effort, provider and `--no-daemon` settings are agent arguments, not new server
+APIs. No newer-server API requirement was identified. The bundled schema does
+not date individual features; real registration/open and native startup on
+0.9.1 remain parent acceptance checks, not results of the host-free tests.
 
 After the parent has reviewed and linked the plugin, the hnew interface is:
 

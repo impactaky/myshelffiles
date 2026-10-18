@@ -2,8 +2,20 @@
 
 Derived from [t4t5/herdr-forkr](https://github.com/t4t5/herdr-forkr), pinned
 commit `1c1f6130589bf65456b6cdf398abfb5ddc1becad`. The upstream MIT license and
-copyright are retained in LICENSE. Runtime dependencies: Bash, jq, Herdr 0.9.3,
-and the selected native agent CLI. Nothing here installs integrations or agents.
+copyright are retained in LICENSE. Runtime dependencies: Bash, jq, Herdr CLI
+0.9.3 with a server 0.9.1 compatibility target, and the selected native agent
+CLI. Nothing here installs integrations or agents.
+
+The manifest minimum is server 0.9.1. The public API surface is `pane current`,
+`agent get/start/rename`, `pane process-info/split`, `tab create`, and
+`workspace create`, using cwd, env and focus options. Startup checks use the
+agent's readiness, context and native session fields. These are present in CLI
+0.9.3's bundled schema/help; upstream forkr declares a 0.8.0 minimum for its
+core operations. No newer-server API requirement was identified. The bundled
+schema does not date individual features, so this is the intended compatibility
+target, not a completed live 0.9.1 certification. Parent acceptance must verify
+registration, layout creation and native startup on 0.9.1; guards remain strict
+if any expected readiness/session information is unavailable.
 
 Local changes add caller guards, explicit model/effort/provider settings, strict
 native session validation, config-directory forwarding, and Codex `--no-daemon`.

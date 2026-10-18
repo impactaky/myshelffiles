@@ -1,7 +1,7 @@
 id = "forkr"
 name = "forkr"
 version = "0.2.0"
-min_herdr_version = "0.9.3"
+min_herdr_version = "0.9.1"
 description = "Fork the focused agent's conversation into a new tab, split, or workspace and keep the original running. Claude Code, Codex, Pi, OpenCode."
 platforms = ["linux", "macos"]
 

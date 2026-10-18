@@ -1,7 +1,7 @@
 id = "agent-launcher"
 name = "Local agent launcher"
 version = "0.1.0"
-min_herdr_version = "0.9.3"
+min_herdr_version = "0.9.1"
 description = "Start a fresh Codex or Claude session with native permission defaults."
 platforms = ["linux", "macos"]
 

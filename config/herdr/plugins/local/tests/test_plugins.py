@@ -216,6 +216,30 @@ class Plugins(unittest.TestCase):
                                 env=self.env, capture_output=True)
         self.assertNotEqual(result.returncode, 0)
 
+    def test_server_091_compatibility_manifest_contract(self):
+        # Pin the intended server floor independently of the installed CLI.
+        # Static contract checks do not certify a live server's capabilities.
+        for plugin in ('forkr', 'agent-launcher'):
+            with self.subTest(plugin=plugin):
+                manifest = tomllib.loads((ROOT / plugin / 'herdr-plugin.toml').read_text())
+                self.assertEqual(manifest['min_herdr_version'], '0.9.1')
+                entries_key = 'actions' if plugin == 'forkr' else 'panes'
+                self.assertEqual(set(manifest), {
+                    'id', 'name', 'version', 'min_herdr_version', 'description',
+                    'platforms', entries_key})
+                entries = manifest[entries_key]
+                if plugin == 'forkr':
+                    self.assertEqual({e['id'] for e in entries},
+                                     {'tab', 'split', 'split-down', 'workspace'})
+                    for entry in entries:
+                        self.assertEqual(set(entry), {'id', 'title', 'description', 'contexts', 'command'})
+                        self.assertEqual(entry['contexts'], ['pane'])
+                else:
+                    self.assertEqual({e['id'] for e in entries}, {'agent-codex', 'agent-claude'})
+                    for entry in entries:
+                        self.assertEqual(set(entry), {'id', 'title', 'placement', 'command'})
+                        self.assertEqual(entry['placement'], 'split')
+
     def test_syntax_manifests_and_no_permission_overrides(self):
         manifests = list(ROOT.glob('*/herdr-plugin.toml'))
         self.assertEqual(len(manifests), 2)
