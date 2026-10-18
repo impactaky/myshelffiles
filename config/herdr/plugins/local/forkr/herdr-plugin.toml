@@ -1,0 +1,35 @@
+id = "forkr"
+name = "forkr"
+version = "0.2.0"
+min_herdr_version = "0.9.3"
+description = "Fork the focused agent's conversation into a new tab, split, or workspace and keep the original running. Claude Code, Codex, Pi, OpenCode."
+platforms = ["linux", "macos"]
+
+# Headless actions: bind them to keys (see README) or use the pane menu.
+[[actions]]
+id = "tab"
+title = "Fork conversation into a new tab"
+description = "Copy the focused pane's agent conversation into a new tab in this workspace"
+contexts = ["pane"]
+command = ["bash", "forkr.sh", "--tab"]
+
+[[actions]]
+id = "split"
+title = "Fork conversation into a split (right)"
+description = "Copy the focused pane's agent conversation into a pane to the right of it"
+contexts = ["pane"]
+command = ["bash", "forkr.sh", "--split", "right"]
+
+[[actions]]
+id = "split-down"
+title = "Fork conversation into a split (down)"
+description = "Copy the focused pane's agent conversation into a pane below it"
+contexts = ["pane"]
+command = ["bash", "forkr.sh", "--split", "down"]
+
+[[actions]]
+id = "workspace"
+title = "Fork conversation into a new workspace"
+description = "Copy the focused pane's agent conversation into a new workspace"
+contexts = ["pane"]
+command = ["bash", "forkr.sh", "--workspace"]

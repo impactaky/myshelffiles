@@ -1,0 +1,18 @@
+id = "agent-launcher"
+name = "Local agent launcher"
+version = "0.1.0"
+min_herdr_version = "0.9.3"
+description = "Start a fresh Codex or Claude session with native permission defaults."
+platforms = ["linux", "macos"]
+
+[[panes]]
+id = "agent-codex"
+title = "Codex"
+placement = "split"
+command = ["bash", "-c", 'exec bash "${HERDR_PLUGIN_ROOT:?}/run-agent.sh" codex']
+
+[[panes]]
+id = "agent-claude"
+title = "Claude"
+placement = "split"
+command = ["bash", "-c", 'exec bash "${HERDR_PLUGIN_ROOT:?}/run-agent.sh" claude']
