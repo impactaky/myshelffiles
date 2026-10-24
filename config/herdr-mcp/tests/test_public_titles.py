@@ -121,6 +121,8 @@ class HelperTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(run.call_args_list[0].args, ("agent", "get", "w1:p2"))
         write = run.call_args_list[1]
         self.assertEqual(write.args[:4], ("pane", "report-metadata", "w1:p2", "--source"))
+        self.assertTrue(write.kwargs["empty_ack"])
+        self.assertNotIn("empty_ack", run.call_args_list[0].kwargs)
         self.assertIn("public_title=公開タイトル", write.args)
         self.assertIn("public_title_binding=" + titles.binding(a), write.args)
         for call in run.call_args_list:
@@ -193,10 +195,10 @@ class HelperTests(unittest.IsolatedAsyncioTestCase):
 
 
 class TransportTests(unittest.IsolatedAsyncioTestCase):
-    async def run_fake(self, code):
+    async def run_fake(self, code, **kwargs):
         # Use a subprocess fixture, not a real Herdr binary or socket.
         with patch.object(titles, "HERDR_BIN", sys.executable):
-            return await titles.run_herdr("-c", code, env=dict(os.environ))
+            return await titles.run_herdr("-c", code, env=dict(os.environ), **kwargs)
 
     async def test_transport_failures_never_disclose(self):
         cases = [
@@ -218,6 +220,15 @@ class TransportTests(unittest.IsolatedAsyncioTestCase):
         with patch.object(titles, "HERDR_BIN", "/missing/" + PRIVATE):
             with self.assertRaisesRegex(titles.SafeError, "^Herdr unavailable$"):
                 await titles.run_herdr(env={})
+
+    async def test_silent_metadata_ack_does_not_relax_reads_or_errors(self):
+        self.assertEqual(await self.run_fake("pass", empty_ack=True), {})
+        with self.assertRaisesRegex(titles.SafeError, "^Invalid Herdr response$"):
+            await self.run_fake("pass")
+        with self.assertRaisesRegex(titles.SafeError, "^Herdr request failed$"):
+            await self.run_fake("import sys; sys.exit(1)", empty_ack=True)
+        with self.assertRaisesRegex(titles.SafeError, "^Invalid Herdr response$"):
+            await self.run_fake(f"print({PRIVATE!r})", empty_ack=True)
 
     async def test_valid_envelope(self):
         self.assertEqual(await self.run_fake('print(\'{"result": {"type": "agent_list", "agents": []}}\')'), {"type": "agent_list", "agents": []})

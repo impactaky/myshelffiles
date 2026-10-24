@@ -39,7 +39,7 @@ async def publish(title: str, env: dict[str, str]) -> None:
         "pane", "report-metadata", pane, "--source", "public-title",
         "--applies-to-source", session["source"],
         "--token", f"public_title={title}",
-        "--token", f"public_title_binding={identity}", env=env,
+        "--token", f"public_title_binding={identity}", env=env, empty_ack=True,
     )
 
 

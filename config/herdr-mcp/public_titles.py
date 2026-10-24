@@ -57,7 +57,7 @@ def public_agent(agent: dict) -> dict[str, str]:
     return {"title": title, "status": status}
 
 
-async def run_herdr(*args: str, env: dict[str, str]) -> dict:
+async def run_herdr(*args: str, env: dict[str, str], empty_ack: bool = False) -> dict:
     try:
         process = await asyncio.create_subprocess_exec(
             HERDR_BIN, *args, env=env, stdin=asyncio.subprocess.DEVNULL,
@@ -81,6 +81,9 @@ async def run_herdr(*args: str, env: dict[str, str]) -> dict:
         raw = await asyncio.wait_for(read(), TIMEOUT)
         if process.returncode:
             raise SafeError("Herdr request failed")
+        # report-metadata acknowledges success with no stdout in Herdr 0.9.5.
+        if empty_ack and not raw:
+            return {}
         try:
             data = json.loads(raw)
         except (ValueError, UnicodeError, RecursionError):

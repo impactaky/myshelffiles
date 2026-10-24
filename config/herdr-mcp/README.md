@@ -48,7 +48,9 @@ identities matching the current outer Codex/Claude agent kind qualify; stale
 session metadata from a different agent kind is rejected. Path-only references
 are unverifiable and remain unset. A later conversation in the same pane cannot use the old binding.
 An identity change between the helper's read and write leaves a stale binding
-that MCP rejects. The same conversation can overwrite its title.
+that MCP rejects. The same conversation can overwrite its title. The helper
+accepts the CLI's empty stdout acknowledgement after a successful metadata write; reads still
+require valid JSON envelopes.
 
 The local pane context and Herdr metadata are trusted; this is not authentication
 against local processes forging environment variables or tokens. Title wording
