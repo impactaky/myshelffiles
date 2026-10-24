@@ -101,6 +101,7 @@ async def generate(prompt: str, env: dict[str, str]) -> str:
             "model_instructions_file": str(instructions), "project_doc_max_bytes": 0,
             "skills.include_instructions": False, "skills.bundled.enabled": False,
             "features.skip_host_skill_discovery": True,
+            "suppress_unstable_features_warning": True,
             "tools.update_plan.enabled": False, "web_search": "disabled",
             "analytics.enabled": False, "history.persistence": "none",
             "include_environment_context": False, "mcp_servers": {},

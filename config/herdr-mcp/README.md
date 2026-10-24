@@ -85,7 +85,9 @@ there is no Claude authentication dependency. The invocation ignores user
 configuration and execpolicy rules, runs ephemerally in a fresh temporary cwd with a read-only
 sandbox, and disables hooks, shell/tools, MCPs, apps, multi-agent execution,
 images, web search, sleep, computer use, skill search and shell snapshots.
-Bundled skills and host skill discovery are disabled; project document bytes
+Bundled skills and host skill discovery are disabled. The invocation sets
+`suppress_unstable_features_warning=true` so the host-skill feature warning does
+not produce an error item; the parser still rejects error events. Project document bytes
 are zero and skill instructions are excluded. History persistence, analytics
 and environment context are disabled. The generic public-title system policy
 is the only content in a temporary `model_instructions_file`; the source prompt
