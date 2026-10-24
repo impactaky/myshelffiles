@@ -1,12 +1,10 @@
 {
   description = "Portable environment configuration";
 
-  inputs.nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-26.05";
-  inputs.nixpkgs-darwin.url = "github:nixos/nixpkgs?ref=nixpkgs-26.05-darwin";
-  inputs.nixpkgs-unstable.url = "github:nixos/nixpkgs?ref=nixpkgs-unstable";
+  inputs.nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable";
 
   outputs =
-    { nixpkgs, ... }@inputs:
+    { nixpkgs, ... }:
     let
       systems = [
         "aarch64-linux"
@@ -15,15 +13,10 @@
         "x86_64-darwin"
       ];
 
-      pkgsFor =
-        system:
-        (if nixpkgs.lib.hasSuffix "-darwin" system then inputs.nixpkgs-darwin else nixpkgs)
-        .legacyPackages.${system};
+      pkgsFor = system: nixpkgs.legacyPackages.${system};
 
       # Load user packages from root packages.nix
-      loadPackages =
-        system: pkgs:
-        import ./packages.nix (pkgs // { unstable = inputs.nixpkgs-unstable.legacyPackages.${system}; });
+      loadPackages = pkgs: import ./packages.nix (pkgs // { unstable = pkgs; });
     in
     {
       packages = nixpkgs.lib.genAttrs systems (system: {
@@ -34,7 +27,7 @@
           paths = [
             (pkgsFor system).cacert
           ]
-          ++ loadPackages system (pkgsFor system);
+          ++ loadPackages (pkgsFor system);
         };
       });
     };

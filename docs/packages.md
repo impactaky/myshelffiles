@@ -21,7 +21,9 @@ If you use a [portable export](carry.md#portable), run
 `./utils/create_portable.sh` again after the rebuild. It copies only the
 packages that changed.
 
-Packages come from stable nixpkgs. Prefix `unstable.` for a newer version:
+Packages come from `nixos-unstable` on Linux and macOS. The `unstable.` prefix
+remains available for compatibility with existing package lists and refers to
+the same package set as unprefixed names:
 
 ```nix
 pkgs: with pkgs; [
