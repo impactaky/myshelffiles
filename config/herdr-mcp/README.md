@@ -72,29 +72,39 @@ not disable sandboxing or grant broad permissions.
 native UserPromptSubmit JSON on stdin. They require inherited Herdr routing and
 an exact match between the payload session ID, explicit agent kind and the
 current pane's registered session. They query only that pane, never
-`transcript_path` or history. A valid bound title skips inference, including on
-resume. New conversations in the same pane can initialize again. A nonblocking
+`transcript_path` or history. Nonempty `agent_id` payloads and Claude payloads
+with `cursor_version` or inherited `CURSOR_VERSION` are skipped before inference
+so child/non-native prompts cannot initialize a parent pane. A valid bound title
+skips inference, including on resume. New conversations in the same pane can initialize again. A nonblocking
 per-pane flock prevents concurrent inference; its private temporary-directory
 filename hashes socket and pane, and the file is empty. There is no success
 cache: only published bound metadata counts, so failures remain retryable.
 
-Both hooks invoke the already authenticated `claude` CLI using the installed
-`sonnet` alias with low effort. This requires the installed CLI's `--safe-mode`,
-which disables custom instructions, hooks, plugins and other customizations
-while retaining authentication (admin policy still applies). The invocation
-also explicitly disables tools, MCPs, skills, hook settings, Chrome integration,
-and session persistence, with empty setting sources and a replacement system
-prompt. No `--bare` or permission/sandbox bypass flags are used. It runs in a
-fresh temporary cwd, strips Herdr and nested Codex/Claude context (retaining
-`CLAUDE_CONFIG_DIR` for authentication), and passes the submitted prompt as JSON
-data on stdin, never shell text. It saves neither input nor output. The model
-receives the public-title privacy policy as its system instruction; semantic
-privacy depends on the model following that policy. Form and Japanese text are
-checked locally; there is no raw-prompt fallback.
+Both hooks invoke authenticated `codex exec` with `gpt-6-luna` and low effort;
+there is no Claude authentication dependency. The invocation ignores user
+configuration and execpolicy rules, runs ephemerally in a fresh temporary cwd with a read-only
+sandbox, and disables hooks, shell/tools, MCPs, apps, multi-agent execution,
+images, web search, sleep, computer use, skill search and shell snapshots.
+Bundled skills and host skill discovery are disabled; project document bytes
+are zero and skill instructions are excluded. History persistence, analytics
+and environment context are disabled. The generic public-title system policy
+is the only content in a temporary `model_instructions_file`; the source prompt
+is sent only as JSON data on stdin, never shell text or a stored prompt file.
+`CODEX_HOME` is retained for existing authentication; other Codex, Claude and
+Herdr context variables (including `CLAUDE_CONFIG_DIR`) are stripped. No
+credentials are changed, and no permission, sandbox or hook-trust bypass is used.
 
-Limits are 256 KiB input, 32 KiB UTF-8 prompt, 1 KiB model output, 1 second for
-stdin, 12 seconds for generation and 55 seconds overall after reading stdin.
-Oversized prompts are skipped rather than truncated. Generation cleanup kills
+The bounded JSONL event stream is parsed; it is never treated as title text.
+Only the last `agent_message` from a successfully completed turn is eligible.
+Reasoning items are ignored. Failed turns, errors, tool/execution events and
+unknown event types reject the result and leave initialization retryable. No
+model output or diagnostics are logged or persisted by this hook. Semantic
+privacy depends on the model following the system policy; title form and
+Japanese text are checked locally, with no raw-prompt fallback.
+
+Limits are 256 KiB input, 32 KiB UTF-8 prompt, 64 KiB JSON events, 1 KiB final
+message, 1 second for stdin, 12 seconds for generation and 55 seconds overall
+after reading stdin. Oversized prompts are skipped rather than truncated. Generation cleanup kills
 the process group and drains pipes, including on timeout. All entrypoint errors
 exit zero silently and remain retryable on a later prompt. The hook checks the
 session binding and existing title again after generation. The final native
@@ -154,8 +164,8 @@ Parent live acceptance (independently in each agent's own inherited Herdr pane):
    native hook trust and CLI authentication without logging private prompts;
    another prompt should retry. Do not inspect other conversations or transcripts.
 
-Live hook delivery, native trust, OAuth inference and live Herdr publication
-remain parent acceptance gaps; isolated tests intentionally exercise none of them.
+Live hook delivery, native trust, authenticated Codex inference and live Herdr
+publication remain parent acceptance gaps; isolated tests exercise none of them.
 
 ## Isolated verification
 

@@ -23,6 +23,7 @@ from set_title import caller_pane, current_agent, write_title
 MAX_INPUT = 262144
 MAX_PROMPT = 32768
 MAX_OUTPUT = 1024
+MAX_EVENTS = 65536
 GENERATION_TIMEOUT = 12
 SYSTEM = """出力は1〜48文字、一行の抽象的な日本語タスクタイトルだけ。
 公開されるため顧客名、人名、プロジェクト識別子、秘密値、非公開パス、依頼文の逐語引用は絶対に含めない。
@@ -55,16 +56,57 @@ def pane_lock(env: dict[str, str]):
 
 def generator_env(env: dict[str, str]) -> dict[str, str]:
     return {k: v for k, v in env.items()
-            if not k.startswith(("HERDR_", "CODEX", "CLAUDE")) or k == "CLAUDE_CONFIG_DIR"}
+            if not k.startswith(("HERDR_", "CODEX", "CLAUDE")) or k == "CODEX_HOME"}
+
+
+def final_message(raw: bytes) -> str:
+    """Accept only a successful tool-free turn, never use JSON events as a title."""
+    title = None
+    completed = False
+    for line in raw.splitlines():
+        try:
+            event = json.loads(line)
+        except (ValueError, UnicodeError, RecursionError):
+            raise SafeError("Invalid generation events") from None
+        if not isinstance(event, dict) or completed:
+            raise SafeError("Invalid generation events")
+        event_type = event.get("type")
+        if event_type == "item.completed":
+            item = event.get("item")
+            if not isinstance(item, dict) or item.get("type") not in ("agent_message", "reasoning"):
+                raise SafeError("Unexpected generation activity")
+            if item["type"] == "agent_message":
+                title = item.get("text")
+        elif event_type == "turn.completed":
+            completed = True
+        elif event_type not in ("thread.started", "turn.started"):
+            # Includes failed turns, errors and all tool/execution lifecycle events.
+            raise SafeError("Unexpected generation activity")
+    if not completed or not isinstance(title, str) or len(title.encode()) > MAX_OUTPUT:
+        raise SafeError("Missing final generation")
+    return title.strip()
 
 
 async def generate(prompt: str, env: dict[str, str]) -> str:
-    argv = ["claude", "--print", "--model", "sonnet", "--effort", "low",
-            "--safe-mode", "--setting-sources", "", "--settings", '{"disableAllHooks":true}',
-            "--tools", "", "--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}',
-            "--disable-slash-commands", "--no-chrome", "--no-session-persistence",
-            "--system-prompt", SYSTEM, "--output-format", "text"]
     with tempfile.TemporaryDirectory(prefix="herdr-title-") as cwd:
+        instructions = Path(cwd) / "instructions.md"
+        instructions.write_text(SYSTEM, encoding="utf-8")
+        argv = ["codex", "exec", "--ignore-user-config", "--ignore-rules", "--ephemeral",
+                "--skip-git-repo-check", "--sandbox", "read-only", "--json"]
+        for feature in ("hooks", "shell_tool", "multi_agent", "apps", "view_image",
+                        "image_generation", "sleep_tool", "computer_use", "skill_search", "shell_snapshot"):
+            argv.extend(["--disable", feature])
+        for key, value in {
+            "model": "gpt-6-luna", "model_reasoning_effort": "low",
+            "model_instructions_file": str(instructions), "project_doc_max_bytes": 0,
+            "skills.include_instructions": False, "skills.bundled.enabled": False,
+            "features.skip_host_skill_discovery": True,
+            "tools.update_plan.enabled": False, "web_search": "disabled",
+            "analytics.enabled": False, "history.persistence": "none",
+            "include_environment_context": False, "mcp_servers": {},
+        }.items():
+            argv.extend(["-c", key + "=" + json.dumps(value)])
+        argv.append("-")
         process = await asyncio.create_subprocess_exec(
             *argv, cwd=cwd, env=generator_env(env), start_new_session=True,
             stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
@@ -77,12 +119,12 @@ async def generate(prompt: str, env: dict[str, str]) -> str:
             raw = bytearray()
             while chunk := await process.stdout.read(256):
                 raw.extend(chunk)
-                if len(raw) > MAX_OUTPUT:
+                if len(raw) > MAX_EVENTS:
                     raise SafeError("Invalid generation")
             await process.wait()
             if process.returncode:
                 raise SafeError("Generation failed")
-            return raw.decode("utf-8").strip()
+            return final_message(bytes(raw))
 
         try:
             return await asyncio.wait_for(exchange(), GENERATION_TIMEOUT)
@@ -98,6 +140,9 @@ async def generate(prompt: str, env: dict[str, str]) -> str:
 async def initialize(kind: str, payload: dict, env: dict[str, str]) -> None:
     caller_pane(env)
     if kind not in ("codex", "claude") or not isinstance(payload, dict):
+        return
+    # Match SessionStart routing: children and Cursor are not native pane sessions.
+    if payload.get("agent_id") or (kind == "claude" and (payload.get("cursor_version") or env.get("CURSOR_VERSION"))):
         return
     session_id = payload.get("session_id")
     prompt = payload.get("prompt")
