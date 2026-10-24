@@ -10,9 +10,7 @@ import sys
 from public_titles import SafeError, binding, run_herdr, valid_title
 
 
-async def publish(title: str, env: dict[str, str]) -> None:
-    if not valid_title(title):
-        raise SafeError("Invalid public title (use 1–48 characters on one line)")
+def caller_pane(env: dict[str, str]) -> str:
     pane = env.get("HERDR_PANE_ID", "")
     if env.get("HERDR_ENV") != "1" or not re.fullmatch(r"w[A-Za-z0-9]+:p[A-Za-z0-9]+", pane):
         raise SafeError("Identified Herdr caller required")
@@ -22,6 +20,11 @@ async def publish(title: str, env: dict[str, str]) -> None:
         or any(ord(c) < 32 or ord(c) == 127 for c in socket)
     ):
         raise SafeError("Explicit inherited Herdr socket required")
+    return pane
+
+
+async def current_agent(env: dict[str, str], kind: str | None = None, session_id: str | None = None) -> dict:
+    pane = caller_pane(env)
     # Explicit inherited target: never fall back to the UI-focused pane.
     result = await run_herdr("agent", "get", pane, env=env)
     agent = result.get("agent")
@@ -31,16 +34,32 @@ async def publish(title: str, env: dict[str, str]) -> None:
     if identity is None:
         raise SafeError("Conversation identity unavailable")
     session = agent["agent_session"]
+    if kind is not None and (session["agent"] != kind or session["value"] != session_id):
+        raise SafeError("Conversation identity mismatch")
     # Codex supplies an independent caller conversation ID when available.
     thread = env.get("CODEX_THREAD_ID")
     if thread and (session["agent"] != "codex" or session["value"] != thread):
         raise SafeError("Conversation identity mismatch")
+    return agent
+
+
+async def write_title(title: str, agent: dict, env: dict[str, str]) -> None:
+    pane = caller_pane(env)
+    session = agent["agent_session"]
+    identity = binding(agent)
     await run_herdr(
         "pane", "report-metadata", pane, "--source", "public-title",
         "--applies-to-source", session["source"],
         "--token", f"public_title={title}",
         "--token", f"public_title_binding={identity}", env=env, empty_ack=True,
     )
+
+
+async def publish(title: str, env: dict[str, str]) -> None:
+    if not valid_title(title):
+        raise SafeError("Invalid public title (use 1–48 characters on one line)")
+    agent = await current_agent(env)
+    await write_title(title, agent, env)
 
 
 def main() -> int:

@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""Attach the same canonical policy to native global instructions, on explicit install."""
+"""Install the shared title policy and owned native prompt hooks explicitly."""
 from __future__ import annotations
 
 import argparse
+import json
 import os
+import shlex
 from pathlib import Path
 
 BEGIN = "<!-- herdr-public-title:begin -->"
@@ -21,6 +23,54 @@ def managed_text(existing: str, policy: str) -> str:
     start = existing.index(BEGIN)
     end = existing.index(END) + len(END)
     return existing[:start] + block + existing[end:]
+
+
+# This marker is an argv option to the interpreter, not a native config extension.
+# It survives source directory changes and uniquely identifies our owned hook.
+OWNER = "herdr_public_title_hook=1"
+
+
+def hook_config(existing: str, source: Path, kind: str) -> str:
+    config = json.loads(existing)
+    if not isinstance(config, dict):
+        raise ValueError("Hook config must be an object")
+    hooks = config.setdefault("hooks", {})
+    if not isinstance(hooks, dict):
+        raise ValueError("hooks must be an object")
+    groups = hooks.setdefault("UserPromptSubmit", [])
+    if not isinstance(groups, list):
+        raise ValueError("UserPromptSubmit must be an array")
+    owned = []
+    for group in groups:
+        if not isinstance(group, dict) or not isinstance(group.get("hooks"), list):
+            raise ValueError("Invalid hook group")
+        for hook in group["hooks"]:
+            if not isinstance(hook, dict):
+                raise ValueError("Invalid hook")
+            command = hook.get("command", "")
+            try:
+                argv = shlex.split(command) if isinstance(command, str) else []
+            except ValueError:
+                argv = []
+            if (len(argv) == 5 and argv[1:3] == ["-X", OWNER]
+                    and Path(argv[3]).name == "first_prompt_title.py"
+                    and argv[4] in ("codex", "claude")):
+                owned.append((group, hook))
+    command = shlex.join([str(source / ".venv/bin/python"), "-X", OWNER,
+                          str(source / "first_prompt_title.py"), kind])
+    canonical = {"type": "command", "command": command, "timeout": 60}
+    if owned:
+        group, hook = owned[0]
+        hook.clear()
+        hook.update(canonical)
+        for extra_group, extra_hook in owned[1:]:
+            extra_group["hooks"].remove(extra_hook)
+        groups[:] = [g for g in groups if g["hooks"] or g not in [x[0] for x in owned[1:]]]
+    else:
+        groups.append({"hooks": [canonical]})
+    if existing and config == json.loads(existing):
+        return existing
+    return json.dumps(config, ensure_ascii=False, indent=2) + "\n"
 
 
 def install(source: Path, codex_home: Path, claude_dir: Path) -> list[Path]:
@@ -42,6 +92,11 @@ def install(source: Path, codex_home: Path, claude_dir: Path) -> list[Path]:
         except FileNotFoundError:
             existing = ""
         updates.append((target, existing, managed_text(existing, policy)))
+    # Preflight native configs too, before changing any instructions or hooks.
+    hook_targets = [(codex_home / "hooks.json", "codex"), (claude_dir.expanduser() / "settings.json", "claude")]
+    for target, kind in hook_targets:
+        existing = target.read_text() if target.exists() else ""
+        updates.append((target, existing, hook_config(existing if target.exists() else "{}", source, kind)))
     for target, existing, updated in updates:
         if updated != existing:
             target.parent.mkdir(parents=True, exist_ok=True)

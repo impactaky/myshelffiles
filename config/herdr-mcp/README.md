@@ -22,7 +22,7 @@ entry, separate lockfile and venv are retained. CLI errors discard stderr;
 malformed JSON/envelopes, responses over 2 MB and requests over 20 seconds
 produce fixed public errors. No write tools or conversation history storage exist.
 
-## Local publication and startup instructions
+## Topic-change publication
 
 ```bash
 /home/impactaky/shelffiles/config/herdr-mcp/.venv/bin/python \
@@ -57,55 +57,105 @@ against local processes forging environment variables or tokens. Title wording
 is an agent policy: the helper validates form, and cannot detect semantic secrets
 in an otherwise valid public title.
 
-`title-instructions.md` is the single canonical policy for both agents: publish
-a public abstract Japanese task title after understanding the first request,
-refresh on main-topic changes, omit identifiers/secrets/private paths/quotes,
-and never read other conversations. Failure must not block the main task.
+`title-instructions.md` is the single canonical policy for both agents. Initial
+publication belongs to the installed UserPromptSubmit hook; agents use the
+helper only for main-topic changes. Titles omit identifiers, secrets, private
+paths and prompt quotations; other conversations are never read. Failure must
+not block the main task.
 Reading the helper/venv and connecting to the caller socket must be permitted;
 if necessary request ordinary sandbox escalation for that invocation. Setup does
 not disable sandboxing or grant broad permissions.
 
+## First-prompt initialization
+
+`first_prompt_title.py codex` and `first_prompt_title.py claude` consume bounded
+native UserPromptSubmit JSON on stdin. They require inherited Herdr routing and
+an exact match between the payload session ID, explicit agent kind and the
+current pane's registered session. They query only that pane, never
+`transcript_path` or history. A valid bound title skips inference, including on
+resume. New conversations in the same pane can initialize again. A nonblocking
+per-pane flock prevents concurrent inference; its private temporary-directory
+filename hashes socket and pane, and the file is empty. There is no success
+cache: only published bound metadata counts, so failures remain retryable.
+
+Both hooks invoke the already authenticated `claude` CLI using the installed
+`sonnet` alias with low effort. This requires the installed CLI's `--safe-mode`,
+which disables custom instructions, hooks, plugins and other customizations
+while retaining authentication (admin policy still applies). The invocation
+also explicitly disables tools, MCPs, skills, hook settings, Chrome integration,
+and session persistence, with empty setting sources and a replacement system
+prompt. No `--bare` or permission/sandbox bypass flags are used. It runs in a
+fresh temporary cwd, strips Herdr and nested Codex/Claude context (retaining
+`CLAUDE_CONFIG_DIR` for authentication), and passes the submitted prompt as JSON
+data on stdin, never shell text. It saves neither input nor output. The model
+receives the public-title privacy policy as its system instruction; semantic
+privacy depends on the model following that policy. Form and Japanese text are
+checked locally; there is no raw-prompt fallback.
+
+Limits are 256 KiB input, 32 KiB UTF-8 prompt, 1 KiB model output, 1 second for
+stdin, 12 seconds for generation and 55 seconds overall after reading stdin.
+Oversized prompts are skipped rather than truncated. Generation cleanup kills
+the process group and drains pipes, including on timeout. All entrypoint errors
+exit zero silently and remain retryable on a later prompt. The hook checks the
+session binding and existing title again after generation. The final native
+read/write pair is not an atomic compare-and-set; a session switch in that tiny
+gap produces a stale binding which public readers reject, as with the manual
+helper. No title can become valid for a different session through that race.
+
 ## Parent deployment after review
 
-No production state or global instructions are changed by tests. From the
-reviewed worktree, deploy only these explicit files:
+The worker does not write production configuration. Review the task commit,
+then copy only its changed source files into the production `config/herdr-mcp`
+(not private native config trees, venvs or caches). From that reviewed checkout:
 
 ```bash
-repo=/home/impactaky/shelffiles
-for file in server.py public_titles.py set_title.py setup_instructions.py \
-  title-instructions.md README.md tests/test_public_titles.py \
-  pyproject.toml uv.lock run.sh .gitignore; do
-  install -D -m 644 "config/herdr-mcp/$file" "$repo/config/herdr-mcp/$file"
-done
-chmod 755 "$repo/config/herdr-mcp/run.sh"
-uv sync --locked --project "$repo/config/herdr-mcp"
-uv run --locked --project "$repo/config/herdr-mcp" python -m unittest discover \
-  -s "$repo/config/herdr-mcp/tests" -v
-"$repo/config/herdr-mcp/.venv/bin/python" \
-  "$repo/config/herdr-mcp/setup_instructions.py" \
-  --codex-home "$repo/config/codex" --claude-config-dir "$repo/config/claude"
+uv sync --locked --project config/herdr-mcp
+uv run --locked --project config/herdr-mcp python -m unittest discover \
+  -s config/herdr-mcp/tests -v
+config/herdr-mcp/.venv/bin/python config/herdr-mcp/setup_instructions.py \
+  --source-dir "$PWD/config/herdr-mcp" \
+  --codex-home "$PWD/config/codex" --claude-config-dir "$PWD/config/claude"
 ```
 
-First inspect the task commit against the parent's saved baseline; do not copy
-venvs, caches or runtime config trees. Setup defaults to the canonical shelffiles
-source directory. `--source-dir` allows an explicit alternative for testing or
-deployment. Without explicit targets, Codex uses `$CODEX_HOME` or `~/.codex`;
-Claude uses `$CLAUDE_CONFIG_DIR` or `~/.claude`. The managed policy block goes into
-Codex `AGENTS.md` (existing `AGENTS.override.md` takes precedence) and Claude
-`CLAUDE.md`. Existing text outside the block is preserved, duplicate blocks are
-not added, and later runs refresh the block from the canonical document. Setup
-preflights malformed markers in both files before writing. It does not touch
-Herdr lifecycle hooks or settings. Re-run setup after editing the canonical policy.
+Setup merges one owned command hook into Codex `hooks.json` and Claude
+`settings.json`, passing the explicit agent kind. The Python `-X
+herdr_public_title_hook=1` argv marker identifies ownership across source moves;
+reruns update only that hook, keeping unrelated hook ordering, commands and
+other fields semantically unchanged. The hook timeout is 60 seconds. Both
+JSON files and both managed instruction blocks are preflighted before any
+write. Invalid config aborts installation. No hook trust, approvals or Herdr
+integration scripts are changed. JSON formatting can be normalized on updates.
 
-Reload the MCP connection using the existing gateway configuration and start new
-Codex/Claude conversations so their native global instructions are loaded.
-Already running conversations need the canonical policy supplied explicitly;
-installation cannot retroactively inject startup instructions. Parent owns
-limited live acceptance: publish a synthetic public title from each agent's own
-pane, inspect only `agent_list`, update the title, and verify a fresh conversation
-in the same pane starts unset until it publishes. Do not read terminal output.
-No worker live verification was performed. If Herdr has not yet reported an ID,
-publication fails safely and may be retried after that ID becomes available.
+`--source-dir` selects the deployed helper and interpreter directory. Without
+explicit targets Codex uses `$CODEX_HOME` or `~/.codex`, and Claude uses
+`$CLAUDE_CONFIG_DIR` or `~/.claude`. Policy blocks go into Codex `AGENTS.md`
+(existing `AGENTS.override.md` takes precedence) and Claude `CLAUDE.md`. Text
+outside the blocks is preserved. Rerun setup after changing the policy or source
+location.
+
+Inspect the resulting native config diff: existing notification and SessionStart
+integration commands must remain unchanged, alongside exactly one owned
+UserPromptSubmit hook in each config. Start fresh Codex and Claude processes to
+load hooks/instructions, and complete native hook trust normally if requested.
+Codex may require approval of a new or changed hook command; installation does
+not silently trust it. Make sure SessionStart has registered an ID before testing.
+
+Parent live acceptance (independently in each agent's own inherited Herdr pane):
+
+1. Start a fresh conversation and submit a synthetic, non-sensitive task such as
+   `公開テスト用の並び替え処理を説明してください`. Verify `agent_list` reports
+   a short abstract Japanese title automatically, without a manual helper call.
+2. Submit another prompt and resume the conversation: the title must remain.
+3. Change the main topic and use `set_title.py` from that conversation to verify
+   manual topic updates still work. Submit another prompt: preserve that title.
+4. Start a replacement conversation in the same pane: the old bound title must
+   be unset until the new prompt initializes a new title. Check both agents.
+5. Rerun setup and verify no native config diff. If initialization fails, check
+   native hook trust and CLI authentication without logging private prompts;
+   another prompt should retry. Do not inspect other conversations or transcripts.
+
+Live hook delivery, native trust, OAuth inference and live Herdr publication
+remain parent acceptance gaps; isolated tests intentionally exercise none of them.
 
 ## Isolated verification
 
@@ -115,7 +165,7 @@ UV_CACHE_DIR=/tmp/herdr-public-uv-cache uv run --locked --project config/herdr-m
 UV_CACHE_DIR=/tmp/herdr-public-uv-cache uv run --locked --project config/herdr-mcp \
   python -m compileall -q config/herdr-mcp/server.py config/herdr-mcp/public_titles.py \
   config/herdr-mcp/set_title.py config/herdr-mcp/setup_instructions.py \
-  config/herdr-mcp/tests/test_public_titles.py
+  config/herdr-mcp/first_prompt_title.py config/herdr-mcp/tests
 bash -n config/herdr-mcp/run.sh
 ```
 

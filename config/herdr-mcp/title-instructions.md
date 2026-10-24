@@ -1,4 +1,4 @@
-Herdr 内 (`HERDR_ENV=1`) では、最初の依頼を理解した後、短い公開用の日本語タスクタイトルを設定してください。主題が変わったときだけ更新します。
+Herdr 内 (`HERDR_ENV=1`) の初回の公開用日本語タスクタイトルは、インストール済みの UserPromptSubmit フックが設定します。エージェントは初回に重ねて設定せず、主題が変わったときだけ以下の helper で更新してください。
 
 ```bash
 "@SOURCE_DIR@/.venv/bin/python" "@SOURCE_DIR@/set_title.py" '公開用の抽象的な日本語タイトル'
