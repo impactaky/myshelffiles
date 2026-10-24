@@ -51,6 +51,23 @@ class MetadataTests(unittest.TestCase):
         publish_fixture(a, "新しい会話")
         self.assertEqual(titles.public_agent(a)["title"], "新しい会話")
 
+    def test_outer_agent_replacement_with_lagging_session(self):
+        for previous, replacement in (("codex", "claude"), ("claude", "codex")):
+            with self.subTest(previous=previous):
+                a = agent()
+                a["agent"] = previous
+                a["agent_session"]["agent"] = previous
+                publish_fixture(a)
+                self.assertEqual(titles.public_agent(a)["title"], "公開タイトル")
+                a["agent"] = replacement
+                self.assertIsNone(titles.binding(a))
+                self.assertEqual(titles.public_agent(a)["title"], titles.UNSET)
+                a["agent_session"]["agent"] = replacement
+                a["agent_session"]["value"] = "replacement-conversation"
+                self.assertEqual(titles.public_agent(a)["title"], titles.UNSET)
+                publish_fixture(a, "新しい会話")
+                self.assertEqual(titles.public_agent(a)["title"], "新しい会話")
+
     def test_malformed_unbound_and_unknown_identity(self):
         for tokens in (None, [], {}, {"public_title": "題"},
                        {"public_title": "題", "public_title_binding": "stale"}):
@@ -93,7 +110,7 @@ class McpTests(unittest.IsolatedAsyncioTestCase):
 
 class HelperTests(unittest.IsolatedAsyncioTestCase):
     def env(self):
-        return {"HERDR_ENV": "1", "HERDR_PANE_ID": "w1:p2", "HERDR_SOCKET_PATH": "synthetic-caller-socket", "CODEX_THREAD_ID": "conversation-one"}
+        return {"HERDR_ENV": "1", "HERDR_PANE_ID": "w1:p2", "HERDR_SOCKET_PATH": "/tmp/synthetic-caller.sock", "CODEX_THREAD_ID": "conversation-one"}
 
     async def test_own_target_and_inherited_routing(self):
         a = agent()
@@ -106,7 +123,38 @@ class HelperTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(write.args[:4], ("pane", "report-metadata", "w1:p2", "--source"))
         self.assertIn("public_title=公開タイトル", write.args)
         self.assertIn("public_title_binding=" + titles.binding(a), write.args)
-        self.assertIs(write.kwargs["env"], env)
+        for call in run.call_args_list:
+            self.assertIs(call.kwargs["env"], env)
+            self.assertEqual(call.kwargs["env"]["HERDR_SOCKET_PATH"], "/tmp/synthetic-caller.sock")
+
+    async def test_mixed_case_pane_id(self):
+        env = self.env()
+        env["HERDR_PANE_ID"] = "w8W:p1aB"
+        a = agent()
+        a["pane_id"] = env["HERDR_PANE_ID"]
+        with patch.object(set_title, "run_herdr", AsyncMock(side_effect=[{"type": "agent_info", "agent": a}, {}])) as run:
+            await set_title.publish("公開タイトル", env)
+        self.assertEqual(run.call_args_list[0].args, ("agent", "get", "w8W:p1aB"))
+        self.assertEqual(run.call_args_list[1].args[:3], ("pane", "report-metadata", "w8W:p1aB"))
+        a["pane_id"] = "w8w:p1aB"
+        with patch.object(set_title, "run_herdr", AsyncMock(return_value={"type": "agent_info", "agent": a})) as run:
+            with self.assertRaises(titles.SafeError):
+                await set_title.publish("公開タイトル", env)
+            self.assertEqual(run.await_count, 1)
+
+    async def test_missing_or_invalid_socket_never_calls_cli(self):
+        for socket in (None, "", "relative.sock", " ", " /tmp/caller.sock", "/tmp/caller.sock ",
+                       "/tmp/caller\n.sock", "/tmp/caller\0.sock", "/", "/tmp/"):
+            with self.subTest(socket=socket):
+                env = self.env()
+                if socket is None:
+                    del env["HERDR_SOCKET_PATH"]
+                else:
+                    env["HERDR_SOCKET_PATH"] = socket
+                with patch.object(set_title, "run_herdr", AsyncMock()) as run:
+                    with self.assertRaisesRegex(titles.SafeError, "^Explicit inherited Herdr socket required$"):
+                        await set_title.publish("公開タイトル", env)
+                    run.assert_not_called()
 
     async def test_reject_unidentified_and_unsafe_without_cli(self):
         for env, title in (({}, "題"), ({"HERDR_ENV": "1"}, "題"), ({"HERDR_ENV": "1", "HERDR_PANE_ID": "--current"}, "題"), (self.env(), "bad\nline"), (self.env(), "a" * 49)):
@@ -124,6 +172,9 @@ class HelperTests(unittest.IsolatedAsyncioTestCase):
         a["agent_session"] = None
         cases.append(a)
         cases.append(agent("replaced-conversation"))
+        a = agent()
+        a["agent"] = "claude"
+        cases.append(a)
         for a in cases:
             with patch.object(set_title, "run_herdr", AsyncMock(return_value={"type": "agent_info", "agent": a})) as run:
                 with self.assertRaises(titles.SafeError):
@@ -133,6 +184,7 @@ class HelperTests(unittest.IsolatedAsyncioTestCase):
     async def test_claude_identity(self):
         a = agent()
         a["agent_session"]["agent"] = "claude"
+        a["agent"] = "claude"
         env = self.env()
         del env["CODEX_THREAD_ID"]
         with patch.object(set_title, "run_herdr", AsyncMock(side_effect=[{"type": "agent_info", "agent": a}, {}])) as run:

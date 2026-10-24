@@ -29,8 +29,11 @@ produce fixed public errors. No write tools or conversation history storage exis
   /home/impactaky/shelffiles/config/herdr-mcp/set_title.py '公開タイトルの実装'
 ```
 
-The helper requires inherited `HERDR_ENV=1` and a `HERDR_PANE_ID`, queries only
-that explicit pane, and preserves the caller's socket/config/session routing.
+The helper requires inherited `HERDR_ENV=1`, an alphanumeric public pane ID
+(such as `w8W:p1`), and an explicit absolute `HERDR_SOCKET_PATH` without control
+characters or surrounding whitespace. It rejects absent/empty/invalid socket
+paths before invoking Herdr, queries only that explicit pane, and preserves the
+caller's socket/config/session routing.
 It rejects mismatching pane IDs, absent conversation identities, and mismatching
 `CODEX_THREAD_ID` when present. It never selects the UI-focused pane. A moved pane
 whose inherited ID no longer matches is rejected; start with a refreshed caller
@@ -41,8 +44,9 @@ whitespace, control/format characters or Unicode line separators. The helper
 writes only `public_title` and `public_title_binding` metadata under source
 `public-title`, scoped to the session's source. The binding hashes all four
 `agent_session` fields (`source`, `agent`, `kind`, `value`). Only nonempty `id`
-identities for Codex/Claude qualify; path-only references are unverifiable and
-remain unset. A later conversation in the same pane cannot use the old binding.
+identities matching the current outer Codex/Claude agent kind qualify; stale
+session metadata from a different agent kind is rejected. Path-only references
+are unverifiable and remain unset. A later conversation in the same pane cannot use the old binding.
 An identity change between the helper's read and write leaves a stale binding
 that MCP rejects. The same conversation can overwrite its title.
 

@@ -34,6 +34,9 @@ def binding(agent: dict) -> str | None:
     # A path alone is not a verifiable conversation ID; never inspect its contents.
     if session.get("kind") != "id" or session.get("agent") not in ("codex", "claude"):
         return None
+    # Detection can change before session metadata catches up after pane reuse.
+    if agent.get("agent") != session["agent"]:
+        return None
     parts = [session.get(k) for k in ("source", "agent", "kind", "value")]
     if not all(isinstance(p, str) and p.strip() and len(p) <= 4096 for p in parts):
         return None

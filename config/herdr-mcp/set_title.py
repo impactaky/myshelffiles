@@ -14,8 +14,14 @@ async def publish(title: str, env: dict[str, str]) -> None:
     if not valid_title(title):
         raise SafeError("Invalid public title (use 1–48 characters on one line)")
     pane = env.get("HERDR_PANE_ID", "")
-    if env.get("HERDR_ENV") != "1" or not re.fullmatch(r"w[0-9]+:p[0-9]+", pane):
+    if env.get("HERDR_ENV") != "1" or not re.fullmatch(r"w[A-Za-z0-9]+:p[A-Za-z0-9]+", pane):
         raise SafeError("Identified Herdr caller required")
+    socket = env.get("HERDR_SOCKET_PATH", "")
+    if (
+        not os.path.isabs(socket) or socket.endswith("/") or socket != socket.strip()
+        or any(ord(c) < 32 or ord(c) == 127 for c in socket)
+    ):
+        raise SafeError("Explicit inherited Herdr socket required")
     # Explicit inherited target: never fall back to the UI-focused pane.
     result = await run_herdr("agent", "get", pane, env=env)
     agent = result.get("agent")
