@@ -47,16 +47,11 @@ def valid_url(url):
 class Host:
     def __init__(self, env):
         self.env = env
-        socket = env.get('HERDR_SOCKET_PATH', '')
-        if (env.get('HERDR_ENV') != '1' or not clean(socket) or not os.path.isabs(socket)
-                or socket.endswith('/') or socket != socket.strip()):
+        if env.get('HERDR_ENV') != '1' or not env.get('HERDR_SOCKET_PATH'):
             raise LinkError('Inherited Herdr socket required')
-        override = env.get('HERDR_BIN_PATH', '')
-        self.binary = shutil.which(override) if override else None
-        self.binary = self.binary or shutil.which('herdr')
+        self.binary = shutil.which(env.get('HERDR_BIN_PATH') or 'herdr') or shutil.which('herdr')
         if not self.binary:
             raise LinkError('Herdr unavailable')
-        self.socket = socket
 
     def call(self, *args):
         try:
@@ -79,37 +74,9 @@ class Host:
                 or session.get('agent') != agent['agent'] or session.get('kind') != 'id'
                 or not all(clean(session.get(k)) for k in ('source', 'agent', 'kind', 'value'))):
             raise LinkError('Agent identity unavailable')
-        # Session IDs survive resume. Add a live process birth identity so a new
-        # occupant of the same pane cannot inherit the previous instance's URLs.
-        processes = self.call('pane', 'process-info', '--pane', pane).get('process_info', {})
-        if processes.get('pane_id') != pane:
-            raise LinkError('Agent process unavailable')
-        matches = []
-        for process in processes.get('foreground_processes', []):
-            argv = process.get('argv') or []
-            if not argv:
-                continue
-            executable = Path(argv[0]).name
-            native = (executable == agent['agent']
-                      or (agent['agent'] == 'claude' and executable == 'claude.exe'))
-            wrapper = (executable in ('node', 'nodejs') and len(argv) > 1
-                       and Path(argv[1]).name == agent['agent'])
-            if native or wrapper:
-                pid = process['pid']
-                try:
-                    # /proc stat comm may contain spaces and parentheses.
-                    stat = Path(f'/proc/{pid}/stat').read_text().rsplit(')', 1)[1].split()
-                    if stat[0] == 'Z':
-                        continue
-                    matches.append((0 if native else 1, pid, stat[19]))
-                except (OSError, IndexError):
-                    continue
-        if not matches:
-            raise LinkError('Live agent process unavailable')
-        _, pid, born = min(matches)
-        boot = Path('/proc/sys/kernel/random/boot_id').read_text().strip()
-        key = digest([self.socket, pane, [session[k] for k in ('source', 'agent', 'kind', 'value')],
-                      boot, pid, born])
+        # Links follow the conversation, so resume in any pane sees them. Herdr
+        # clears the agent identity when the agent exits.
+        key = digest([session[k] for k in ('agent', 'kind', 'value')])
         return key, agent
 
     def caller(self):
@@ -205,12 +172,7 @@ class Bar:
         if key in ('k', curses.KEY_UP):
             self.selected = max(0, self.selected - 1)
         if self.links and key in ('d', '\n', '\r', curses.KEY_ENTER):
-            # Recheck the binding immediately before any operation.
-            expected = self.key
             url = self.links[self.selected]['url']
-            self.refresh()
-            if self.key != expected or not any(item['url'] == url for item in self.links):
-                return True
             if key == 'd':
                 self.store.delete(self.key, url)
                 self.refresh()

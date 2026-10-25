@@ -44,17 +44,16 @@ Agent の本来の作業は続けること。[短い Agent 向け指示](link-in
 
 ## 呼び出し元と保存先
 
-登録は `HERDR_ENV=1`、継承した `HERDR_PANE_ID`、絶対 path の `HERDR_SOCKET_PATH` を必須とする。
+登録は `HERDR_ENV=1`、継承した `HERDR_PANE_ID`、`HERDR_SOCKET_PATH` を必須とする。
 UI の focus から登録先を選ばない。応答の pane ID、現在の agent kind、`agent_session` の
 source / agent / kind / value を検査し、Codex / Claude の `id` のみ認める。
 `CODEX_THREAD_ID` があれば会話 ID との一致も検査する。
 
 保存先は `${XDG_STATE_HOME:-$HOME/.local/state}/herdr-agent-links/`。
-socket・pane・session の 4 fields に加え、Linux の boot ID・agent PID・`/proc` の開始時刻を
-hash に含める。会話 ID だけでは同じ会話の resume を区別できないため、この process binding が必要。
-Herdr の `pane process-info` にある Codex / Claude の live process を確認できなければ登録を拒否する。
-実プロセスの終了・置換や session の変更後は古い一覧を表示せず、同じ会話の resume に引き継がない。
-古い JSON は表示対象から外れるが disk に残るため、不要なら plugin を閉じて保存先を削除できる。
+ファイル名は `agent_session` の agent / kind / value の hash で、一覧は会話ごとに一つ。
+同じ会話を resume すれば、別の pane や別の Herdr session でも同じ一覧が出る。fork や新規会話は別の一覧になる。
+agent が終了すると Herdr が pane の agent 識別を消すので、bar は「agent 不在」になり、登録も拒否される。
+終わった会話の JSON は disk に残るため、不要なら保存先から削除できる。
 書き込み・削除は file lock 下で JSON を原子的に置換する。pane metadata は使用しない。
 
 ## 手元への URL の届け方

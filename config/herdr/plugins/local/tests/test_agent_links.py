@@ -31,8 +31,6 @@ class AgentLinks(unittest.TestCase):
         self.bin.symlink_to(ROOT / 'tests/fake_host.py')
         self.fixture = self.base / 'fixture.json'
         self.log = self.base / 'log'
-        self.processes = [subprocess.Popen(['sleep', '120']) for _ in range(3)]
-        self.addCleanup(self.stop_processes)
         self.env = dict(os.environ, HERDR_ENV='1', HERDR_PANE_ID=A,
                         HERDR_SOCKET_PATH='/synthetic/socket', HERDR_BIN_PATH=str(self.bin),
                         TEST_LOG=str(self.log), TEST_FIXTURE=str(self.fixture),
@@ -40,21 +38,14 @@ class AgentLinks(unittest.TestCase):
         self.env.pop('CODEX_THREAD_ID', None)
         self.env.pop('HERDR_PLUGIN_CONTEXT_JSON', None)
         self.data = dict(agent_links=True, focus=A, panes={}, processes={})
-        for pane, kind, process in ((A, 'codex', self.processes[0]), (B, 'claude', self.processes[1])):
+        for pane, kind in ((A, 'codex'), (B, 'claude')):
             self.data['panes'][pane] = dict(pane_id=pane, agent=kind, tab_id='w1:t1', workspace_id='w1',
                 agent_session=dict(source='herdr:' + kind, agent=kind, kind='id', value='conversation-' + pane))
-            self.data['processes'][pane] = [dict(pid=process.pid, argv=[kind])]
         for pane in (BAR, SHELL):
             self.data['panes'][pane] = dict(pane_id=pane, tab_id='w1:t1', workspace_id='w1')
         self.save()
         self.host = links.Host(self.env)
         self.store = links.Store(self.env)
-
-    def stop_processes(self):
-        for process in self.processes:
-            if process.poll() is None:
-                process.terminate()
-            process.wait()
 
     def save(self):
         self.fixture.write_text(json.dumps(self.data))
@@ -130,7 +121,7 @@ class AgentLinks(unittest.TestCase):
             self.add(url, ok=False)
             self.assertEqual(self.snapshot(), before)
         for setting, value in (('HERDR_ENV', ''), ('HERDR_PANE_ID', B),
-                               ('HERDR_SOCKET_PATH', 'relative'), ('CODEX_THREAD_ID', 'wrong')):
+                               ('HERDR_SOCKET_PATH', ''), ('CODEX_THREAD_ID', 'wrong')):
             original = self.env.get(setting)
             if setting == 'HERDR_PANE_ID':
                 # Simulate a server response that disagrees with the inherited ID.
@@ -149,7 +140,7 @@ class AgentLinks(unittest.TestCase):
             self.assertEqual(self.snapshot(), before)
         self.data['panes'][A]['agent_session'] = original
 
-    def test_instance_replacement_resume_and_exit(self):
+    def test_session_replacement_resume_and_exit(self):
         self.add()
         bar = self.bar()
         original = self.data['panes'][A]['agent_session']['value']
@@ -157,23 +148,35 @@ class AgentLinks(unittest.TestCase):
         self.save()
         bar.refresh()
         self.assertEqual(bar.links, [])
-        # Same conversation, new live process: resume must not resurrect URLs.
+        # Same conversation again: resume sees the same URLs.
         self.data['panes'][A]['agent_session']['value'] = original
-        self.data['processes'][A][0]['pid'] = self.processes[2].pid
         self.save()
-        self.assertEqual(self.bar().links, [])
+        self.assertEqual(len(self.bar().links), 1)
         self.add(name='Resumed')
         self.data['focus'] = BAR
         self.save()
         bar.refresh()
         self.assertEqual(bar.links[0]['name'], 'Resumed')
-        self.processes[2].terminate()
-        self.processes[2].wait()
+        # Herdr clears the pane's agent identity when the agent exits.
+        self.data['panes'][A] = dict(pane_id=A, tab_id='w1:t1', workspace_id='w1')
+        self.save()
         bar.refresh()
         self.assertEqual(bar.links, [])
         before = self.snapshot()
         self.add(ok=False)
         self.assertEqual(self.snapshot(), before)
+
+    def test_resume_in_other_pane_and_socket_sees_same_links(self):
+        self.add()
+        session = dict(self.data['panes'][A]['agent_session'])
+        self.data['panes'][SHELL] = dict(pane_id=SHELL, agent='codex', tab_id='w1:t1',
+                                         workspace_id='w1', agent_session=session)
+        self.data['focus'] = SHELL
+        self.save()
+        host = links.Host(dict(self.env, HERDR_PANE_ID=BAR, HERDR_SOCKET_PATH='/other/socket'))
+        bar = links.Bar(host, self.store, SHELL)
+        bar.refresh()
+        self.assertEqual([item['name'] for item in bar.links], ['One'])
 
     def test_simultaneous_writers_and_optional_name(self):
         url = 'https://example.org/' + 'a' * 300
@@ -189,18 +192,6 @@ class AgentLinks(unittest.TestCase):
         self.assertEqual(next(x['name'] for x in items if x['url'] == url), url[:256])
         self.assertFalse(list(self.store.root.glob('*.tmp')))
 
-    def test_observed_launcher_forms_and_stale_binary_override(self):
-        for pane, argv in ((A, ['node', '/tools/bin/codex']),
-                           (B, ['/tools/claude-code/bin/claude.exe'])):
-            self.data['processes'][pane][0]['argv'] = argv
-            self.env['HERDR_PANE_ID'] = pane
-            self.save()
-            self.add()
-            self.assertEqual(len(self.store.read(self.host.identity(pane)[0])), 1)
-        self.env['HERDR_BIN_PATH'] = str(self.base / 'deleted')
-        self.env['PATH'] = str(self.base) + ':' + self.env['PATH']
-        self.add()
-
     def test_toggle_right_split_then_close_only_bar(self):
         manifest = tomllib.loads((PLUGIN / 'herdr-plugin.toml').read_text())
         self.assertEqual(manifest['actions'][0]['contexts'], ['pane'])
@@ -213,7 +204,7 @@ class AgentLinks(unittest.TestCase):
         self.assertEqual(calls[-1], ['plugin', 'pane', 'open', '--plugin', 'agent-links', '--entrypoint', 'bar',
             '--placement', 'split', '--target-pane', A, '--direction', 'right', '--focus',
             '--env', 'HERDR_AGENT_LINKS_TARGET=' + A])
-        self.data['processes'][BAR] = [dict(pid=self.processes[2].pid,
+        self.data['processes'][BAR] = [dict(pid=1234,
             argv=[sys.executable, str(PLUGIN / 'agent_links.py'), 'bar'])]
         self.save()
         links.toggle(host)
