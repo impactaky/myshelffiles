@@ -15,8 +15,8 @@ Herdr の agent ごとの関連 URL の quick access を、誰が何のために
 
 | ユースケース | 誰が | 目的 | 状態 | 受け入れ検査書 |
 |---|---|---|---|---|
-| [今の agent に関係する URL を開く](open-agent-links.md) | 開発者 | 右の bar で、見ている agent の PR などを一覧し、すぐ手元のブラウザで開く | Scenario Structure Understood | |
-| [作業に関係する URL を残す](record-agent-links.md) | 会話中の Agent | PR を作ったり重要な URL を参照したりしたとき、自分の agent に結び付けて開発者が後で開けるようにする | Scenario Structure Understood | |
+| [今の agent に関係する URL を開く](open-agent-links.md) | 開発者 | 右の bar で、見ている agent の PR などを一覧し、すぐ手元のブラウザで開く | Basic Scenario Enabled | |
+| [作業に関係する URL を残す](record-agent-links.md) | 会話中の Agent | PR を作ったり重要な URL を参照したりしたとき、自分の agent に結び付けて開発者が後で開けるようにする | Basic Scenario Enabled | |
 | 会話の URL を手で直す | 開発者 | 足す・消すを独立に行う | 対象外: 消す・足すは「URL を開く」の extension に含める（2026-10-25） | |
 | 会話をまたいで URL を探す | 開発者 | PR から元の agent に戻る | 対象外: 不要（2026-10-25） | |
 
