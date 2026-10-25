@@ -17,6 +17,27 @@ with open(os.environ['TEST_LOG'], 'a') as log:
 if name != 'herdr':
     sys.exit(0)
 fixture = json.loads(Path(os.environ['TEST_FIXTURE']).read_text())
+if fixture.get('agent_links'):
+    panes = fixture['panes']
+    if args[:2] == ['pane', 'current']:
+        result = {'pane': {'pane_id': fixture['focus']}}
+    elif args[:2] == ['agent', 'get']:
+        result = {'type': 'agent_info', 'agent': panes.get(args[2], {})}
+    elif args[:2] == ['pane', 'get']:
+        result = {'pane': panes[args[2]]}
+    elif args[:2] == ['pane', 'list']:
+        result = {'panes': list(panes.values())}
+    elif args[:2] == ['pane', 'process-info']:
+        pane = args[args.index('--pane') + 1]
+        result = {'process_info': {'pane_id': pane,
+                  'foreground_processes': fixture.get('processes', {}).get(pane, [])}}
+    elif args[:2] == ['agent', 'focus'] or args[:3] in (
+            ['plugin', 'pane', 'open'], ['plugin', 'pane', 'close']):
+        result = {'type': 'ok'}
+    else:
+        sys.exit('unexpected Herdr operation: ' + repr(args))
+    print(json.dumps({'result': result}))
+    sys.exit(0)
 source = fixture['source']
 child = dict(source, pane_id='child', interactive_ready=True,
              launch_pending=False, agent_status='idle',

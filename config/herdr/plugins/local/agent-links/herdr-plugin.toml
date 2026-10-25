@@ -1,0 +1,18 @@
+id = "agent-links"
+name = "Agent links"
+version = "0.1.0"
+min_herdr_version = "0.9.5"
+description = "Related URLs for each live Codex or Claude agent."
+platforms = ["linux"]
+
+[[panes]]
+id = "bar"
+title = "Agent links"
+placement = "split"
+command = ["bash", "-c", 'exec bash "${HERDR_PLUGIN_ROOT:?}/run.sh" bar']
+
+[[actions]]
+id = "toggle"
+title = "Toggle agent links"
+contexts = ["pane"]
+command = ["bash", "run.sh", "toggle"]
