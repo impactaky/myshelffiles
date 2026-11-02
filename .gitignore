@@ -15,6 +15,8 @@ config/op
 
 # User-specific environment settings
 user_env.sh
+# Machine-specific knowledge-management runtime config and the UI password hash
+config/knowledge-management/
 
 /nix
 /portable/nix
