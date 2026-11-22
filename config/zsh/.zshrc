@@ -287,3 +287,5 @@ bindkey '^f' zoxide_fzf
 
 # bun completions
 [ -s "/home/impactaky/.bun/_bun" ] && source "/home/impactaky/.bun/_bun"
+
+[[ -n "$HERDR_ENV" ]] && export FORCE_HYPERLINK=1

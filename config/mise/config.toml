@@ -1,8 +1,12 @@
 [settings]
-install_before = "1d"
+minimum_release_age = "1d"
 
 [tools]
 "npm:agent-browser" = "latest"
 "rust" = "stable"
 "github:impactaky/glolias" = "latest"
 "github:herdrdev/herdr" = "latest"
+"github:steipete/CodexBar" = "latest"
+"hunk" = "latest"
+"go:github.com/doug/termtex/cmd/termtex" = "v0.0.0-20260626010055-e3e21f41b38e"
+rclone = "latest"
