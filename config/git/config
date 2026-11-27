@@ -22,12 +22,23 @@ required = true
 smudge = cat
 clean = sed "/shelffiles/d"
 
+[hook "lfs-post-checkout"]
+	event = post-checkout
+	command = git lfs post-checkout
+[hook "lfs-post-commit"]
+	event = post-commit
+	command = git lfs post-commit
+[hook "lfs-post-merge"]
+	event = post-merge
+	command = git lfs post-merge
+[hook "lfs-pre-push"]
+	event = pre-push
+	command = git lfs pre-push
 [core]
-hooksPath = /home/impactaky/shelffiles/config/git/.githooks
 	pager = hunk pager
 [credential "https://github.com"]
 	helper = 
-	helper = !/home/impactaky/shelffiles/result/bin/.gh-wrapped auth git-credential
+	helper = !gh auth git-credential
 [credential "https://gist.github.com"]
 	helper = 
-	helper = !/home/impactaky/shelffiles/result/bin/.gh-wrapped auth git-credential
+	helper = !gh auth git-credential
