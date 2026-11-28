@@ -272,11 +272,14 @@ class Plugins(unittest.TestCase):
 
     def test_syntax_manifests_and_no_permission_overrides(self):
         manifests = list(ROOT.glob('*/herdr-plugin.toml'))
-        self.assertEqual(len(manifests), 3)
-        self.assertEqual({tomllib.loads(p.read_text())['id'] for p in manifests}, {'forkr', 'agent-launcher', 'agent-links'})
+        startup_plugins = {'agent-order', 'pet-status'}
+        self.assertEqual({p.parent.name for p in manifests},
+                         {'forkr', 'agent-launcher', 'agent-links'} | startup_plugins)
         for path in manifests:
             manifest = tomllib.loads(path.read_text())
-            self.assertFalse({'build', 'startup', 'hooks', 'event_hooks'} & manifest.keys())
+            self.assertEqual(manifest['id'], path.parent.name)
+            self.assertFalse({'build', 'hooks', 'event_hooks'} & manifest.keys())
+            self.assertEqual('startup' in manifest, manifest['id'] in startup_plugins)
         for path in ROOT.rglob('*.sh'):
             subprocess.run(['bash', '-n', str(path)], check=True)
             content = path.read_text()

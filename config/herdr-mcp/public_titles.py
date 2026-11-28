@@ -5,10 +5,12 @@ import asyncio
 import hashlib
 import json
 import unicodedata
+from pathlib import Path
 
-HERDR_BIN = "/home/impactaky/shelffiles/share/_home_impactaky_shelffiles_1000_1000/mise/installs/github-herdrdev-herdr/latest/herdr"
-HERDR_SOCKET = "/home/impactaky/shelffiles/config/herdr/herdr.sock"
-HERDR_CONFIG = "/home/impactaky/shelffiles/config/herdr/config.toml"
+HERDR_BIN = "herdr"
+HERDR_DIR = Path(__file__).resolve().parents[1] / "herdr"
+HERDR_SOCKET = str(HERDR_DIR / "herdr.sock")
+HERDR_CONFIG = str(HERDR_DIR / "config.toml")
 UNSET = "タイトル未設定"
 MAX_TITLE = 48
 MAX_RESPONSE = 2_000_000

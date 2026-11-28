@@ -1,0 +1,14 @@
+/*.sock
+/*.sock.*
+/*.log
+/.plugins.lock
+/plugins.json
+/release-notes.json
+/session.json
+/session-snapshots/
+/sessions/
+/plugins/.locks/
+/plugins/config/
+/plugins/github/
+/plugins/github-installations/
+__pycache__/

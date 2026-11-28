@@ -1,0 +1,9 @@
+# Trial: tab naming only. Upstream herdr-automatic-rename v0.15.0.
+NAME_TABS=1
+NAME_PANES=0
+PANE_TOPICS=0
+AUTO_INDEX=0
+AGENT_TRANSCRIPT=0
+SHOW_PROGRAM_ARGS=0
+SHOW_BRANCH=0
+TAB_CONTEXT=0

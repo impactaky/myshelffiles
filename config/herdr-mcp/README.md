@@ -16,8 +16,7 @@ structured output schema requires an object root, so this bare array is encoded
 in one JSON text content block instead of being wrapped in an object.
 
 The MCP discards inherited `HERDR_*` variables and fixes its socket to
-`/home/impactaky/shelffiles/config/herdr/herdr.sock` and its configuration to
-`/home/impactaky/shelffiles/config/herdr/config.toml`. The existing `run.sh` SSH
+`herdr.sock` and its configuration to `config.toml` in the sibling `herdr` directory. The existing `run.sh` SSH
 entry, separate lockfile and venv are retained. CLI errors discard stderr;
 malformed JSON/envelopes, responses over 2 MB and requests over 20 seconds
 produce fixed public errors. No write tools or conversation history storage exist.
@@ -25,8 +24,8 @@ produce fixed public errors. No write tools or conversation history storage exis
 ## Topic-change publication
 
 ```bash
-/home/impactaky/shelffiles/config/herdr-mcp/.venv/bin/python \
-  /home/impactaky/shelffiles/config/herdr-mcp/set_title.py '公開タイトルの実装'
+"$SHELFFILES/config/herdr-mcp"/.venv/bin/python \
+  "$SHELFFILES/config/herdr-mcp"/set_title.py '公開タイトルの実装'
 ```
 
 The helper requires inherited `HERDR_ENV=1`, an alphanumeric public pane ID

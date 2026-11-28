@@ -1,0 +1,17 @@
+id = "agent-order"
+name = "Agent order"
+version = "0.1.0"
+min_herdr_version = "0.9.5"
+description = "Order the Agents sidebar by status (blocked, done, idle, working), then space order, then most recent state change."
+platforms = ["linux"]
+
+# The view is transient: it is lost when the server exits, so reapply on startup.
+[[startup]]
+command = ["python3", "agent_order.py"]
+
+[[actions]]
+id = "top"
+title = "Focus the top agent"
+description = "Focus the first agent in the Agents sidebar order"
+contexts = ["pane"]
+command = ["python3", "agent_order.py", "top"]

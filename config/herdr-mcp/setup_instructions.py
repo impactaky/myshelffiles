@@ -10,7 +10,7 @@ from pathlib import Path
 
 BEGIN = "<!-- herdr-public-title:begin -->"
 END = "<!-- herdr-public-title:end -->"
-DEFAULT_SOURCE = Path("/home/impactaky/shelffiles/config/herdr-mcp")
+DEFAULT_SOURCE = Path(__file__).resolve().parent
 
 
 def managed_text(existing: str, policy: str) -> str:
